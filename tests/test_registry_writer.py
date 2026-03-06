@@ -44,7 +44,11 @@ class TestRegistryWriter:
         assert result == []
 
     def test_write_multiple_modules(
-        self, writer: RegistryWriter, mock_registry: MagicMock, sample_module: ScannedModule, annotated_module: ScannedModule
+        self,
+        writer: RegistryWriter,
+        mock_registry: MagicMock,
+        sample_module: ScannedModule,
+        annotated_module: ScannedModule,
     ) -> None:
         with patch.object(writer, "_to_function_module", return_value=MagicMock()):
             result = writer.write([sample_module, annotated_module], mock_registry)

@@ -12,6 +12,7 @@ from apcore_toolkit.pydantic_utils import flatten_pydantic_params, resolve_targe
 
 # --- Test models ---
 
+
 class TaskCreate(BaseModel):
     title: str
     done: bool = False
@@ -23,6 +24,7 @@ class UserUpdate(BaseModel):
 
 
 # --- Test functions ---
+
 
 def simple_func(x: int, y: str = "hello") -> str:
     return f"{x}-{y}"
@@ -96,11 +98,13 @@ class TestResolveTarget:
     def test_resolve_builtin(self) -> None:
         result = resolve_target("json:loads")
         import json
+
         assert result is json.loads
 
     def test_resolve_nested(self) -> None:
         result = resolve_target("os.path:join")
         import os.path
+
         assert result is os.path.join
 
     def test_invalid_format(self) -> None:

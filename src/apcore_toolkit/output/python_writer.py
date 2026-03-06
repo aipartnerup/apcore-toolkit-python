@@ -71,9 +71,7 @@ class PythonWriter:
 
                 # Path traversal protection
                 if not file_path.is_relative_to(output_path):
-                    logger.warning(
-                        "Skipping file outside output directory: %s", file_path
-                    )
+                    logger.warning("Skipping file outside output directory: %s", file_path)
                     continue
 
                 if file_path.exists():
@@ -89,10 +87,7 @@ class PythonWriter:
         func_name = self._sanitize_identifier(module.module_id.split(".")[-1])
 
         if ":" not in module.target:
-            raise ValueError(
-                f"Invalid target format: {module.target!r}. "
-                f"Expected 'module.path:callable'."
-            )
+            raise ValueError(f"Invalid target format: {module.target!r}. " f"Expected 'module.path:callable'.")
         target_module, target_func = module.target.rsplit(":", 1)
         self._validate_module_path(target_module)
 
@@ -157,10 +152,7 @@ class PythonWriter:
     def _validate_module_path(path: str) -> str:
         """Validate that *path* is a valid dotted Python import path."""
         if not _MODULE_PATH_RE.match(path):
-            raise ValueError(
-                f"Invalid module path: {path!r}. "
-                f"Must be a valid dotted Python import path."
-            )
+            raise ValueError(f"Invalid module path: {path!r}. " f"Must be a valid dotted Python import path.")
         return path
 
     def _schema_to_params(self, schema: dict[str, Any]) -> list[str]:
@@ -182,7 +174,4 @@ class PythonWriter:
     def _schema_to_call_args(self, schema: dict[str, Any]) -> list[str]:
         """Extract parameter names from a JSON Schema for function call arguments."""
         properties = schema.get("properties", {})
-        return [
-            f"{self._sanitize_identifier(name)}={self._sanitize_identifier(name)}"
-            for name in properties
-        ]
+        return [f"{self._sanitize_identifier(name)}={self._sanitize_identifier(name)}" for name in properties]

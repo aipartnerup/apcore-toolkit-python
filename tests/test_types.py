@@ -31,12 +31,20 @@ class TestScannedModuleDefaults:
 
     def test_mutable_defaults_are_independent(self) -> None:
         a = ScannedModule(
-            module_id="a", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f",
+            module_id="a",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
         )
         b = ScannedModule(
-            module_id="b", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f",
+            module_id="b",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
         )
         a.warnings.append("warn")
         a.metadata["key"] = "val"
@@ -61,8 +69,13 @@ class TestAnnotationsType:
     def test_accepts_module_annotations(self) -> None:
         ann = ModuleAnnotations(readonly=True, idempotent=True)
         m = ScannedModule(
-            module_id="x", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f", annotations=ann,
+            module_id="x",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
+            annotations=ann,
         )
         assert m.annotations is not None
         assert m.annotations.readonly is True
@@ -79,20 +92,33 @@ class TestExamplesField:
     def test_with_examples(self) -> None:
         ex = ModuleExample(title="Get user", inputs={"user_id": 1}, output={"name": "Alice"})
         m = ScannedModule(
-            module_id="x", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f", examples=[ex],
+            module_id="x",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
+            examples=[ex],
         )
         assert len(m.examples) == 1
         assert m.examples[0].title == "Get user"
 
     def test_mutable_default_independent(self) -> None:
         a = ScannedModule(
-            module_id="a", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f",
+            module_id="a",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
         )
         b = ScannedModule(
-            module_id="b", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f",
+            module_id="b",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
         )
         a.examples.append(ModuleExample(title="test", inputs={}, output={}))
         assert b.examples == []

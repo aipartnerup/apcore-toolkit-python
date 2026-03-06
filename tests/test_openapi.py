@@ -104,13 +104,7 @@ class TestExtractInputSchema:
 
     def test_ref_in_request_body(self) -> None:
         operation = {
-            "requestBody": {
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/User"}
-                    }
-                }
-            }
+            "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/User"}}}}
         }
         result = extract_input_schema(operation, OPENAPI_DOC)
         assert "name" in result["properties"]
@@ -137,9 +131,7 @@ class TestExtractOutputSchema:
             "responses": {
                 "200": {
                     "content": {
-                        "application/json": {
-                            "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}}
-                        }
+                        "application/json": {"schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}}}
                     }
                 }
             }
@@ -152,9 +144,7 @@ class TestExtractOutputSchema:
             "responses": {
                 "201": {
                     "content": {
-                        "application/json": {
-                            "schema": {"type": "object", "properties": {"id": {"type": "integer"}}}
-                        }
+                        "application/json": {"schema": {"type": "object", "properties": {"id": {"type": "integer"}}}}
                     }
                 }
             }
@@ -174,15 +164,7 @@ class TestExtractOutputSchema:
 
     def test_ref_in_response(self) -> None:
         operation = {
-            "responses": {
-                "200": {
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/User"}
-                        }
-                    }
-                }
-            }
+            "responses": {"200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/User"}}}}}
         }
         result = extract_output_schema(operation, OPENAPI_DOC)
         assert result["type"] == "object"
@@ -190,13 +172,7 @@ class TestExtractOutputSchema:
     def test_array_with_ref_items(self) -> None:
         operation = {
             "responses": {
-                "200": {
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/UserList"}
-                        }
-                    }
-                }
+                "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/UserList"}}}}
             }
         }
         result = extract_output_schema(operation, OPENAPI_DOC)

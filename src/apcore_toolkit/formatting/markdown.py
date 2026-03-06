@@ -42,7 +42,9 @@ def to_markdown(
     if title:
         lines.append(f"# {title}")
         lines.append("")
-    _render_dict(filtered, lines, depth=0, abs_depth=0, max_depth=max_depth, table_threshold=table_threshold, exclude=exclude)
+    _render_dict(
+        filtered, lines, depth=0, abs_depth=0, max_depth=max_depth, table_threshold=table_threshold, exclude=exclude
+    )
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
@@ -124,15 +126,23 @@ def _render_dict(
                     lines.append(f"{'#' * heading_level} {key}")
                     lines.append("")
                     _render_dict(
-                        value, lines, depth=0, abs_depth=abs_depth + 1,
-                        max_depth=max_depth, table_threshold=table_threshold,
+                        value,
+                        lines,
+                        depth=0,
+                        abs_depth=abs_depth + 1,
+                        max_depth=max_depth,
+                        table_threshold=table_threshold,
                         exclude=exclude,
                     )
                 else:
                     lines.append(f"{'  ' * depth}- **{key}**:")
                     _render_dict(
-                        value, lines, depth=depth + 1, abs_depth=abs_depth + 1,
-                        max_depth=max_depth, table_threshold=table_threshold,
+                        value,
+                        lines,
+                        depth=depth + 1,
+                        abs_depth=abs_depth + 1,
+                        max_depth=max_depth,
+                        table_threshold=table_threshold,
                         exclude=exclude,
                     )
 
@@ -142,8 +152,12 @@ def _render_dict(
             else:
                 lines.append(f"{'  ' * depth}- **{key}**:")
                 _render_list(
-                    value, lines, depth=depth + 1, abs_depth=abs_depth + 1,
-                    max_depth=max_depth, exclude=exclude,
+                    value,
+                    lines,
+                    depth=depth + 1,
+                    abs_depth=abs_depth + 1,
+                    max_depth=max_depth,
+                    exclude=exclude,
                 )
         else:
             lines.append(f"{'  ' * depth}- **{key}**: {_format_scalar(value)}")

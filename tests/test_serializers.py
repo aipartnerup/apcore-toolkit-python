@@ -55,16 +55,30 @@ class TestModuleToDict:
     def test_all_expected_keys(self, sample_module: ScannedModule) -> None:
         result = module_to_dict(sample_module)
         expected_keys = {
-            "module_id", "description", "documentation", "tags", "version",
-            "target", "annotations", "examples", "metadata", "input_schema",
-            "output_schema", "warnings",
+            "module_id",
+            "description",
+            "documentation",
+            "tags",
+            "version",
+            "target",
+            "annotations",
+            "examples",
+            "metadata",
+            "input_schema",
+            "output_schema",
+            "warnings",
         }
         assert set(result.keys()) == expected_keys
 
     def test_warnings_included(self) -> None:
         m = ScannedModule(
-            module_id="x", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f", warnings=["warn1", "warn2"],
+            module_id="x",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
+            warnings=["warn1", "warn2"],
         )
         result = module_to_dict(m)
         assert result["warnings"] == ["warn1", "warn2"]
@@ -80,8 +94,13 @@ class TestModuleToDict:
     def test_examples_serialized(self) -> None:
         ex = ModuleExample(title="Demo", inputs={"x": 1}, output={"y": 2})
         m = ScannedModule(
-            module_id="x", description="", input_schema={}, output_schema={},
-            tags=[], target="m:f", examples=[ex],
+            module_id="x",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
+            examples=[ex],
         )
         result = module_to_dict(m)
         assert len(result["examples"]) == 1

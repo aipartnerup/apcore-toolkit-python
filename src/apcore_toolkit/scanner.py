@@ -118,14 +118,16 @@ class BaseScanner(ABC):
             if mid in seen:
                 seen[mid] += 1
                 new_id = f"{mid}_{seen[mid]}"
-                result.append(replace(
-                    module,
-                    module_id=new_id,
-                    warnings=[
-                        *module.warnings,
-                        f"Module ID renamed from '{mid}' to '{new_id}' to avoid collision",
-                    ],
-                ))
+                result.append(
+                    replace(
+                        module,
+                        module_id=new_id,
+                        warnings=[
+                            *module.warnings,
+                            f"Module ID renamed from '{mid}' to '{new_id}' to avoid collision",
+                        ],
+                    )
+                )
             else:
                 seen[mid] = 1
                 result.append(module)
