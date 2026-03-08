@@ -1,6 +1,10 @@
-# apcore-toolkit
+<div align="center">
+  <img src="https://raw.githubusercontent.com/aipartnerup/apcore-toolkit/main/apcore-toolkit-logo.svg" alt="apcore-toolkit logo" width="200"/>
+</div>
 
-Shared scanner, schema extraction, and output toolkit for [apcore](https://github.com/aipartnerup/apcore-python) Python framework adapters.
+# apcore-toolkit-python
+
+Python implementation of the [apcore-toolkit](https://github.com/aipartnerup/apcore-toolkit).
 
 Extracts ~1,400 lines of duplicated framework-agnostic logic from `django-apcore` and `flask-apcore` into a standalone Python package.
 
@@ -9,6 +13,7 @@ Extracts ~1,400 lines of duplicated framework-agnostic logic from `django-apcore
 ```bash
 pip install apcore-toolkit
 ```
+
 
 ## Core Modules
 
