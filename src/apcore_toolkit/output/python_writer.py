@@ -7,11 +7,14 @@ output/python_writer.py — completely framework-agnostic.
 
 from __future__ import annotations
 
+import ast
 import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from apcore_toolkit.output.types import WriteResult
 
 if TYPE_CHECKING:
     from apcore_toolkit.types import ScannedModule
@@ -39,16 +42,18 @@ class PythonWriter:
         modules: list[ScannedModule],
         output_dir: str,
         dry_run: bool = False,
-    ) -> list[str]:
+        verify: bool = False,
+    ) -> list[WriteResult]:
         """Write Python module files for each ScannedModule.
 
         Args:
             modules: List of ScannedModule instances.
             output_dir: Directory path to write files to.
-            dry_run: If True, return content without writing to disk.
+            dry_run: If True, return results without writing to disk.
+            verify: If True, verify written files have valid Python syntax.
 
         Returns:
-            List of generated Python code strings.
+            List of WriteResult instances.
         """
         if not modules:
             return []
@@ -57,28 +62,35 @@ class PythonWriter:
         if not dry_run:
             output_path.mkdir(parents=True, exist_ok=True)
 
-        results: list[str] = []
+        results: list[WriteResult] = []
         timestamp = datetime.now(timezone.utc).isoformat()
 
         for module in modules:
             code = self._generate_code(module, timestamp)
-            results.append(code)
 
-            if not dry_run:
-                safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", module.module_id)
-                filename = f"{safe_name}.py"
-                file_path = (output_path / filename).resolve()
+            if dry_run:
+                results.append(WriteResult(module_id=module.module_id))
+                continue
 
-                # Path traversal protection
-                if not file_path.is_relative_to(output_path):
-                    logger.warning("Skipping file outside output directory: %s", file_path)
-                    continue
+            safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", module.module_id)
+            filename = f"{safe_name}.py"
+            file_path = (output_path / filename).resolve()
 
-                if file_path.exists():
-                    logger.warning("Overwriting existing file: %s", file_path)
+            # Path traversal protection
+            if not file_path.is_relative_to(output_path):
+                logger.warning("Skipping file outside output directory: %s", file_path)
+                continue
 
-                file_path.write_text(code, encoding="utf-8")
-                logger.debug("Written: %s", file_path)
+            if file_path.exists():
+                logger.warning("Overwriting existing file: %s", file_path)
+
+            file_path.write_text(code, encoding="utf-8")
+            logger.debug("Written: %s", file_path)
+
+            result = WriteResult(module_id=module.module_id, path=str(file_path))
+            if verify:
+                result = self._verify(result, file_path)
+            results.append(result)
 
         return results
 
@@ -175,3 +187,18 @@ class PythonWriter:
         """Extract parameter names from a JSON Schema for function call arguments."""
         properties = schema.get("properties", {})
         return [f"{self._sanitize_identifier(name)}={self._sanitize_identifier(name)}" for name in properties]
+
+    @staticmethod
+    def _verify(result: WriteResult, file_path: Path) -> WriteResult:
+        """Verify that a written Python file has valid syntax."""
+        try:
+            source = file_path.read_text(encoding="utf-8")
+            ast.parse(source, filename=str(file_path))
+        except SyntaxError as exc:
+            return WriteResult(
+                module_id=result.module_id,
+                path=result.path,
+                verified=False,
+                verification_error=f"Invalid Python syntax: {exc}",
+            )
+        return result

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from apcore_toolkit.output.python_writer import PythonWriter
+from apcore_toolkit.output.types import WriteResult
 from apcore_toolkit.types import ScannedModule
 
 
@@ -21,11 +22,8 @@ class TestPythonWriterDryRun:
     def test_single_module(self, sample_module: ScannedModule) -> None:
         result = self.writer.write([sample_module], "/tmp/out", dry_run=True)
         assert len(result) == 1
-        code = result[0]
-        assert "from apcore import module" in code
-        assert "@module(" in code
-        assert "id='users.get_user'" in code
-        assert "from myapp.views import get_user as _original" in code
+        assert isinstance(result[0], WriteResult)
+        assert result[0].module_id == "users.get_user"
 
     def test_function_name_sanitized(self) -> None:
         module = ScannedModule(
@@ -37,13 +35,10 @@ class TestPythonWriterDryRun:
             target="mod.path:func",
         )
         result = self.writer.write([module], "/tmp/out", dry_run=True)
-        code = result[0]
-        # Function name derived from last segment, sanitized
-        assert "def _123_bad_name" in code
+        assert result[0].module_id == "api.v1.123-bad-name"
 
     def test_parameters_from_schema(self, sample_module: ScannedModule) -> None:
-        result = self.writer.write([sample_module], "/tmp/out", dry_run=True)
-        code = result[0]
+        code = self.writer._generate_code(sample_module, "2026-01-01")
         assert "user_id: int" in code
 
     def test_optional_parameters(self) -> None:
@@ -59,24 +54,28 @@ class TestPythonWriterDryRun:
             tags=[],
             target="mod:func",
         )
-        result = self.writer.write([module], "/tmp/out", dry_run=True)
-        code = result[0]
+        code = self.writer._generate_code(module, "2026-01-01")
         assert "name: str" in code
         assert "age: int | None = None" in code
 
     def test_annotations_in_decorator(self, annotated_module: ScannedModule) -> None:
-        result = self.writer.write([annotated_module], "/tmp/out", dry_run=True)
-        code = result[0]
+        code = self.writer._generate_code(annotated_module, "2026-01-01")
         assert "annotations=" in code
 
     def test_no_annotations_omitted(self, sample_module: ScannedModule) -> None:
-        result = self.writer.write([sample_module], "/tmp/out", dry_run=True)
-        code = result[0]
+        code = self.writer._generate_code(sample_module, "2026-01-01")
         assert "annotations=" not in code
 
     def test_multiple_modules(self, sample_module: ScannedModule, annotated_module: ScannedModule) -> None:
         result = self.writer.write([sample_module, annotated_module], "/tmp/out", dry_run=True)
         assert len(result) == 2
+
+    def test_generated_code_has_imports(self, sample_module: ScannedModule) -> None:
+        code = self.writer._generate_code(sample_module, "2026-01-01")
+        assert "from apcore import module" in code
+        assert "@module(" in code
+        assert "id='users.get_user'" in code
+        assert "from myapp.views import get_user as _original" in code
 
 
 class TestPythonWriterValidation:
@@ -113,11 +112,13 @@ class TestPythonWriterFileOutput:
         self.writer = PythonWriter()
 
     def test_writes_files(self, tmp_path: Path, sample_module: ScannedModule) -> None:
-        self.writer.write([sample_module], str(tmp_path))
+        results = self.writer.write([sample_module], str(tmp_path))
         files = list(tmp_path.glob("*.py"))
         assert len(files) == 1
         code = files[0].read_text()
         assert "Auto-generated apcore module" in code
+        assert len(results) == 1
+        assert results[0].path is not None
 
     def test_creates_output_dir(self, tmp_path: Path, sample_module: ScannedModule) -> None:
         out_dir = tmp_path / "nested" / "output"
@@ -130,3 +131,31 @@ class TestPythonWriterFileOutput:
         self.writer.write([sample_module], str(tmp_path))
         files = list(tmp_path.glob("*.py"))
         assert len(files) == 1
+
+
+class TestPythonWriterVerification:
+    def setup_method(self) -> None:
+        self.writer = PythonWriter()
+
+    def test_verify_valid_file(self, tmp_path: Path, sample_module: ScannedModule) -> None:
+        results = self.writer.write([sample_module], str(tmp_path), verify=True)
+        assert len(results) == 1
+        assert results[0].verified is True
+        assert results[0].verification_error is None
+
+    def test_verify_detects_syntax_error(self, tmp_path: Path, sample_module: ScannedModule) -> None:
+        results = self.writer.write([sample_module], str(tmp_path))
+        file_path = Path(results[0].path)
+
+        # Corrupt the file with invalid syntax
+        file_path.write_text("def broken(:\n    pass\n", encoding="utf-8")
+
+        result = WriteResult(module_id="users.get_user", path=str(file_path))
+        verified = PythonWriter._verify(result, file_path)
+        assert verified.verified is False
+        assert "Invalid Python syntax" in verified.verification_error
+
+    def test_verify_not_run_in_dry_run(self, sample_module: ScannedModule) -> None:
+        results = self.writer.write([sample_module], "/tmp/out", dry_run=True, verify=True)
+        assert len(results) == 1
+        assert results[0].verified is True

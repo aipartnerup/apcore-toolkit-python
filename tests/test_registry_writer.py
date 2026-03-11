@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from apcore_toolkit.output.registry_writer import RegistryWriter
+from apcore_toolkit.output.types import WriteResult
 from apcore_toolkit.types import ScannedModule
 
 
@@ -27,7 +28,9 @@ class TestRegistryWriter:
         with patch.object(writer, "_to_function_module", return_value=MagicMock()) as mock_to_fm:
             result = writer.write([sample_module], mock_registry)
 
-        assert result == ["users.get_user"]
+        assert len(result) == 1
+        assert isinstance(result[0], WriteResult)
+        assert result[0].module_id == "users.get_user"
         mock_to_fm.assert_called_once_with(sample_module)
         mock_registry.register.assert_called_once()
 
@@ -36,7 +39,8 @@ class TestRegistryWriter:
     ) -> None:
         result = writer.write([sample_module], mock_registry, dry_run=True)
 
-        assert result == ["users.get_user"]
+        assert len(result) == 1
+        assert result[0].module_id == "users.get_user"
         mock_registry.register.assert_not_called()
 
     def test_write_empty_list(self, writer: RegistryWriter, mock_registry: MagicMock) -> None:
@@ -53,8 +57,48 @@ class TestRegistryWriter:
         with patch.object(writer, "_to_function_module", return_value=MagicMock()):
             result = writer.write([sample_module, annotated_module], mock_registry)
 
-        assert result == ["users.get_user", "tasks.create_task"]
+        assert [r.module_id for r in result] == ["users.get_user", "tasks.create_task"]
         assert mock_registry.register.call_count == 2
+
+
+class TestRegistryWriterVerification:
+    def test_verify_success(
+        self, writer: RegistryWriter, mock_registry: MagicMock, sample_module: ScannedModule
+    ) -> None:
+        mock_registry.get.return_value = MagicMock()
+        with patch.object(writer, "_to_function_module", return_value=MagicMock()):
+            result = writer.write([sample_module], mock_registry, verify=True)
+
+        assert len(result) == 1
+        assert result[0].verified is True
+        mock_registry.get.assert_called_once_with("users.get_user")
+
+    def test_verify_module_not_found(
+        self, writer: RegistryWriter, mock_registry: MagicMock, sample_module: ScannedModule
+    ) -> None:
+        mock_registry.get.return_value = None
+        with patch.object(writer, "_to_function_module", return_value=MagicMock()):
+            result = writer.write([sample_module], mock_registry, verify=True)
+
+        assert result[0].verified is False
+        assert "not found in registry" in result[0].verification_error
+
+    def test_verify_registry_error(
+        self, writer: RegistryWriter, mock_registry: MagicMock, sample_module: ScannedModule
+    ) -> None:
+        mock_registry.get.side_effect = RuntimeError("Registry corrupted")
+        with patch.object(writer, "_to_function_module", return_value=MagicMock()):
+            result = writer.write([sample_module], mock_registry, verify=True)
+
+        assert result[0].verified is False
+        assert "Registry lookup failed" in result[0].verification_error
+
+    def test_verify_not_run_in_dry_run(
+        self, writer: RegistryWriter, mock_registry: MagicMock, sample_module: ScannedModule
+    ) -> None:
+        result = writer.write([sample_module], mock_registry, dry_run=True, verify=True)
+        assert result[0].verified is True
+        mock_registry.get.assert_not_called()
 
 
 class TestGetWriterRegistry:

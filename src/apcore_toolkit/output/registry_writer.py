@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from apcore_toolkit.output.types import WriteResult
 from apcore_toolkit.pydantic_utils import flatten_pydantic_params, resolve_target
 from apcore_toolkit.serializers import annotations_to_dict
 
@@ -37,27 +38,33 @@ class RegistryWriter:
         registry: Registry,
         *,
         dry_run: bool = False,
-    ) -> list[str]:
+        verify: bool = False,
+    ) -> list[WriteResult]:
         """Register scanned modules into the registry.
 
         Args:
             modules: List of ScannedModule instances to register.
             registry: The apcore Registry to register modules into.
-            dry_run: If True, skip registration and return module IDs only.
+            dry_run: If True, skip registration and return results only.
+            verify: If True, verify modules are retrievable from the registry after registration.
 
         Returns:
-            List of registered module IDs.
+            List of WriteResult instances.
         """
-        registered: list[str] = []
+        results: list[WriteResult] = []
         for mod in modules:
             if dry_run:
-                registered.append(mod.module_id)
+                results.append(WriteResult(module_id=mod.module_id))
                 continue
             fm = self._to_function_module(mod)
             registry.register(mod.module_id, fm)
-            registered.append(mod.module_id)
             logger.debug("Registered module: %s", mod.module_id)
-        return registered
+
+            result = WriteResult(module_id=mod.module_id)
+            if verify:
+                result = self._verify(result, mod.module_id, registry)
+            results.append(result)
+        return results
 
     def _to_function_module(self, mod: ScannedModule) -> Any:
         """Convert a ScannedModule to an apcore FunctionModule.
@@ -83,3 +90,22 @@ class RegistryWriter:
             metadata=mod.metadata,
             examples=mod.examples or None,
         )
+
+    @staticmethod
+    def _verify(result: WriteResult, module_id: str, registry: Any) -> WriteResult:
+        """Verify that a module was successfully registered and is retrievable."""
+        try:
+            retrieved = registry.get(module_id)
+            if retrieved is None:
+                return WriteResult(
+                    module_id=module_id,
+                    verified=False,
+                    verification_error=f"Module '{module_id}' not found in registry after registration",
+                )
+        except Exception as exc:
+            return WriteResult(
+                module_id=module_id,
+                verified=False,
+                verification_error=f"Registry lookup failed: {exc}",
+            )
+        return result

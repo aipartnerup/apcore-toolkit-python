@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from apcore_toolkit.output.python_writer import PythonWriter
 from apcore_toolkit.output.registry_writer import RegistryWriter
+from apcore_toolkit.output.types import WriteResult as WriteResult
 from apcore_toolkit.output.yaml_writer import YAMLWriter
 
 

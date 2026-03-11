@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-11
+
+### Added
+
+- `WriteResult` dataclass — structured result type for all writer operations,
+  with optional output verification support
+- `AIEnhancer` — SLM-based metadata enhancement using local OpenAI-compatible
+  APIs (Ollama, vLLM, LM Studio). Fills missing descriptions, infers behavioral
+  annotations, and generates input schemas for untyped functions. All AI-generated
+  fields are tagged with `x-generated-by: slm` for auditability.
+- Output verification via `verify=True` parameter on all writers:
+  - `YAMLWriter`: validates YAML parsability and required binding fields
+  - `PythonWriter`: validates Python syntax via `ast.parse()`
+  - `RegistryWriter`: validates module is retrievable after registration
+- CI matrix expanded to Python 3.11 + 3.12, added mypy and coverage reporting
+
+### Changed
+
+- **BREAKING**: All writers now return `list[WriteResult]` instead of
+  `list[dict]` (YAMLWriter) or `list[str]` (PythonWriter, RegistryWriter).
+  Downstream adapters (`django-apcore`, `flask-apcore`) must update code that
+  accesses writer return values as dicts or strings. Migration:
+  - `result[0]["bindings"]` → use `writer._build_binding(module)` for dict access
+  - `result == ["module.id"]` → `[r.module_id for r in result] == ["module.id"]`
+  - `f"wrote: {item}"` → `f"wrote: {item.module_id}"`
+
+### Tests
+
+- 197 tests (up from 150), all passing
+
+---
+
 ## [0.1.0] - 2026-03-06
 
 Initial release. Extracts shared framework-agnostic logic from `django-apcore`
