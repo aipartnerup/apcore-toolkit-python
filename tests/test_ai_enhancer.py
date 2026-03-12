@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import unittest.mock
 from unittest.mock import patch
 
 import pytest
@@ -167,6 +168,32 @@ class TestEnhanceModule:
         assert result.description == ""  # unchanged
         assert any("Low confidence" in w for w in result.warnings)
 
+    def test_applies_documentation_above_threshold(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
+        llm_response = json.dumps(
+            {
+                "documentation": "Detailed docs for legacy handler.\n\nHandles legacy HTTP requests.",
+                "confidence": {"documentation": 0.85},
+            }
+        )
+        with patch.object(enhancer, "_call_llm", return_value=llm_response):
+            result = enhancer._enhance_module(sparse_module, ["documentation"])
+
+        assert result.documentation == "Detailed docs for legacy handler.\n\nHandles legacy HTTP requests."
+        assert result.metadata["x-generated-by"] == "slm"
+
+    def test_skips_documentation_below_threshold(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
+        llm_response = json.dumps(
+            {
+                "documentation": "Maybe some docs?",
+                "confidence": {"documentation": 0.2},
+            }
+        )
+        with patch.object(enhancer, "_call_llm", return_value=llm_response):
+            result = enhancer._enhance_module(sparse_module, ["documentation"])
+
+        assert result.documentation is None or result.documentation == ""
+        assert any("Low confidence" in w and "documentation" in w for w in result.warnings)
+
     def test_applies_annotations_selectively(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
         llm_response = json.dumps(
             {
@@ -222,6 +249,31 @@ class TestEnhanceModule:
         # Should not crash, annotations unchanged
         assert result.annotations is None or result.annotations == sparse_module.annotations
 
+    def test_ignores_non_bool_annotation_values(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
+        """Non-boolean annotation values from LLM should be silently skipped."""
+        llm_response = json.dumps(
+            {
+                "annotations": {
+                    "readonly": "true",  # string, not bool
+                    "destructive": 1,  # int, not bool
+                    "idempotent": True,  # valid bool
+                },
+                "confidence": {
+                    "annotations.readonly": 0.9,
+                    "annotations.destructive": 0.9,
+                    "annotations.idempotent": 0.9,
+                },
+            }
+        )
+        with patch.object(enhancer, "_call_llm", return_value=llm_response):
+            result = enhancer._enhance_module(sparse_module, ["annotations"])
+
+        assert result.annotations is not None
+        assert result.annotations.idempotent is True
+        # Non-bool values should not have been accepted
+        assert result.annotations.readonly is False  # default
+        assert result.annotations.destructive is False  # default
+
     def test_no_updates_returns_original(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
         llm_response = json.dumps({"confidence": {}})
         with patch.object(enhancer, "_call_llm", return_value=llm_response):
@@ -273,6 +325,72 @@ class TestEnhance:
         assert result[1].description == "Enhanced desc"
 
 
+class TestCallLLM:
+    def test_successful_call(self, enhancer: AIEnhancer) -> None:
+        """_call_llm should return the content from a valid API response."""
+        response_body = json.dumps(
+            {"choices": [{"message": {"content": '{"description": "test"}'}}]}
+        ).encode("utf-8")
+
+        mock_resp = unittest.mock.MagicMock()
+        mock_resp.read.return_value = response_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = unittest.mock.MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = enhancer._call_llm("test prompt")
+
+        assert result == '{"description": "test"}'
+
+    def test_url_error_raises_connection_error(self, enhancer: AIEnhancer) -> None:
+        """_call_llm should wrap URLError into ConnectionError."""
+        import urllib.error
+
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):
+            with pytest.raises(ConnectionError, match="Failed to reach SLM"):
+                enhancer._call_llm("test prompt")
+
+    def test_timeout_error_raises_connection_error(self, enhancer: AIEnhancer) -> None:
+        """_call_llm should wrap TimeoutError into ConnectionError."""
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with pytest.raises(ConnectionError, match="Failed to reach SLM"):
+                enhancer._call_llm("test prompt")
+
+    def test_malformed_response_raises_value_error(self, enhancer: AIEnhancer) -> None:
+        """_call_llm should raise ValueError for unexpected API response structure."""
+        response_body = json.dumps({"result": "no choices key"}).encode("utf-8")
+
+        mock_resp = unittest.mock.MagicMock()
+        mock_resp.read.return_value = response_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = unittest.mock.MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            with pytest.raises(ValueError, match="Unexpected API response structure"):
+                enhancer._call_llm("test prompt")
+
+    def test_request_payload_structure(self, enhancer: AIEnhancer) -> None:
+        """_call_llm should send correct payload and headers."""
+        response_body = json.dumps(
+            {"choices": [{"message": {"content": "ok"}}]}
+        ).encode("utf-8")
+
+        mock_resp = unittest.mock.MagicMock()
+        mock_resp.read.return_value = response_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = unittest.mock.MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+            enhancer._call_llm("hello world")
+
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url == "http://localhost:11434/v1/chat/completions"
+        assert req.get_header("Content-type") == "application/json"
+        payload = json.loads(req.data.decode("utf-8"))
+        assert payload["model"] == "test-model"
+        assert payload["messages"][0]["content"] == "hello world"
+
+
 class TestConfiguration:
     def test_defaults_from_env(self) -> None:
         with patch.dict(
@@ -294,3 +412,41 @@ class TestConfiguration:
         with patch.dict(os.environ, {"APCORE_AI_ENDPOINT": "http://env:8080/v1"}):
             e = AIEnhancer(endpoint="http://override:9090/v1")
             assert e.endpoint == "http://override:9090/v1"
+
+    def test_invalid_threshold_env_raises_value_error(self) -> None:
+        with patch.dict(os.environ, {"APCORE_AI_THRESHOLD": "abc"}, clear=False):
+            with pytest.raises(ValueError, match="APCORE_AI_THRESHOLD"):
+                AIEnhancer()
+
+    def test_invalid_timeout_env_raises_value_error(self) -> None:
+        with patch.dict(os.environ, {"APCORE_AI_TIMEOUT": "not_a_number"}, clear=False):
+            with pytest.raises(ValueError, match="APCORE_AI_TIMEOUT"):
+                AIEnhancer()
+
+    def test_threshold_out_of_range_raises_value_error(self) -> None:
+        with patch.dict(os.environ, {"APCORE_AI_THRESHOLD": "1.5"}, clear=False):
+            with pytest.raises(ValueError, match="APCORE_AI_THRESHOLD"):
+                AIEnhancer()
+
+    def test_negative_threshold_raises_value_error(self) -> None:
+        with patch.dict(os.environ, {"APCORE_AI_THRESHOLD": "-0.1"}, clear=False):
+            with pytest.raises(ValueError, match="APCORE_AI_THRESHOLD"):
+                AIEnhancer()
+
+    def test_negative_timeout_raises_value_error(self) -> None:
+        with patch.dict(os.environ, {"APCORE_AI_TIMEOUT": "-5"}, clear=False):
+            with pytest.raises(ValueError, match="APCORE_AI_TIMEOUT"):
+                AIEnhancer()
+
+    def test_zero_timeout_raises_value_error(self) -> None:
+        with patch.dict(os.environ, {"APCORE_AI_TIMEOUT": "0"}, clear=False):
+            with pytest.raises(ValueError, match="APCORE_AI_TIMEOUT"):
+                AIEnhancer()
+
+    def test_threshold_kwarg_out_of_range_raises(self) -> None:
+        with pytest.raises(ValueError, match="APCORE_AI_THRESHOLD"):
+            AIEnhancer(threshold=2.0)
+
+    def test_timeout_kwarg_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="APCORE_AI_TIMEOUT"):
+            AIEnhancer(timeout=0)

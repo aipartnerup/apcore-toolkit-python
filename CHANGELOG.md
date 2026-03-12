@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
   - `result[0]["bindings"]` → use `writer._build_binding(module)` for dict access
   - `result == ["module.id"]` → `[r.module_id for r in result] == ["module.id"]`
   - `f"wrote: {item}"` → `f"wrote: {item.module_id}"`
+  - Downstream packages should pin `apcore-toolkit<0.2.0` until updated
 
 ### Tests
 

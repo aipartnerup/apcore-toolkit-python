@@ -26,6 +26,7 @@ _DEFAULT_ENDPOINT = "http://localhost:11434/v1"
 _DEFAULT_MODEL = "qwen:0.6b"
 _DEFAULT_THRESHOLD = 0.7
 _DEFAULT_TIMEOUT = 30
+_DEFAULT_ANNOTATIONS = ModuleAnnotations()
 
 
 class AIEnhancer:
@@ -49,10 +50,33 @@ class AIEnhancer:
     ) -> None:
         self.endpoint = endpoint or os.environ.get("APCORE_AI_ENDPOINT", _DEFAULT_ENDPOINT)
         self.model = model or os.environ.get("APCORE_AI_MODEL", _DEFAULT_MODEL)
-        self.threshold = (
-            threshold if threshold is not None else float(os.environ.get("APCORE_AI_THRESHOLD", _DEFAULT_THRESHOLD))
-        )
-        self.timeout = timeout if timeout is not None else int(os.environ.get("APCORE_AI_TIMEOUT", _DEFAULT_TIMEOUT))
+        self.threshold = threshold if threshold is not None else self._parse_float_env("APCORE_AI_THRESHOLD", _DEFAULT_THRESHOLD)
+        self.timeout = timeout if timeout is not None else self._parse_int_env("APCORE_AI_TIMEOUT", _DEFAULT_TIMEOUT)
+
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ValueError("APCORE_AI_THRESHOLD must be a number between 0.0 and 1.0")
+        if self.timeout <= 0:
+            raise ValueError("APCORE_AI_TIMEOUT must be a positive integer")
+
+    @staticmethod
+    def _parse_float_env(name: str, default: float) -> float:
+        raw = os.environ.get(name)
+        if raw is None:
+            return default
+        try:
+            return float(raw)
+        except ValueError:
+            raise ValueError(f"{name} must be a valid number, got {raw!r}") from None
+
+    @staticmethod
+    def _parse_int_env(name: str, default: int) -> int:
+        raw = os.environ.get(name)
+        if raw is None:
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            raise ValueError(f"{name} must be a valid integer, got {raw!r}") from None
 
     @staticmethod
     def is_enabled() -> bool:
@@ -64,6 +88,11 @@ class AIEnhancer:
 
         For each module, identifies missing fields and calls the SLM to
         generate them. Only fields above the confidence threshold are applied.
+
+        Modules are processed sequentially, with one HTTP call per module
+        that has gaps. For large module lists this may be slow (e.g., 50
+        modules at 30s timeout = 25 min worst case). Consider batching
+        or subclassing with an async ``_call_llm`` override for high-volume use.
 
         Args:
             modules: List of ScannedModule instances (post-scan).
@@ -93,7 +122,7 @@ class AIEnhancer:
             gaps.append("description")
         if not module.documentation:
             gaps.append("documentation")
-        if module.annotations is None or module.annotations == ModuleAnnotations():
+        if module.annotations is None or module.annotations == _DEFAULT_ANNOTATIONS:
             gaps.append("annotations")
         if not module.input_schema.get("properties"):
             gaps.append("input_schema")
@@ -133,7 +162,7 @@ class AIEnhancer:
             ann_conf = parsed.get("confidence", {})
             accepted: dict[str, bool] = {}
             for field in ("readonly", "destructive", "idempotent", "requires_approval", "open_world", "streaming"):
-                if field in ann_data:
+                if field in ann_data and isinstance(ann_data[field], bool):
                     field_conf = ann_conf.get(f"annotations.{field}", ann_conf.get(field, 0.0))
                     confidence[f"annotations.{field}"] = field_conf
                     if field_conf >= self.threshold:
