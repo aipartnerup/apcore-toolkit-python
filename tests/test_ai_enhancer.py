@@ -328,9 +328,7 @@ class TestEnhance:
 class TestCallLLM:
     def test_successful_call(self, enhancer: AIEnhancer) -> None:
         """_call_llm should return the content from a valid API response."""
-        response_body = json.dumps(
-            {"choices": [{"message": {"content": '{"description": "test"}'}}]}
-        ).encode("utf-8")
+        response_body = json.dumps({"choices": [{"message": {"content": '{"description": "test"}'}}]}).encode("utf-8")
 
         mock_resp = unittest.mock.MagicMock()
         mock_resp.read.return_value = response_body
@@ -371,9 +369,7 @@ class TestCallLLM:
 
     def test_request_payload_structure(self, enhancer: AIEnhancer) -> None:
         """_call_llm should send correct payload and headers."""
-        response_body = json.dumps(
-            {"choices": [{"message": {"content": "ok"}}]}
-        ).encode("utf-8")
+        response_body = json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode("utf-8")
 
         mock_resp = unittest.mock.MagicMock()
         mock_resp.read.return_value = response_body

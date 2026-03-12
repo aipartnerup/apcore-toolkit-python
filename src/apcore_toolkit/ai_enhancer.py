@@ -50,7 +50,9 @@ class AIEnhancer:
     ) -> None:
         self.endpoint = endpoint or os.environ.get("APCORE_AI_ENDPOINT", _DEFAULT_ENDPOINT)
         self.model = model or os.environ.get("APCORE_AI_MODEL", _DEFAULT_MODEL)
-        self.threshold = threshold if threshold is not None else self._parse_float_env("APCORE_AI_THRESHOLD", _DEFAULT_THRESHOLD)
+        self.threshold = (
+            threshold if threshold is not None else self._parse_float_env("APCORE_AI_THRESHOLD", _DEFAULT_THRESHOLD)
+        )
         self.timeout = timeout if timeout is not None else self._parse_int_env("APCORE_AI_TIMEOUT", _DEFAULT_TIMEOUT)
 
         if not 0.0 <= self.threshold <= 1.0:
