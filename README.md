@@ -24,6 +24,8 @@ pip install apcore-toolkit
 | `YAMLWriter` | Generates `.binding.yaml` files for `apcore.BindingLoader` |
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
+| `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API |
+| `Enhancer` | Pluggable protocol for metadata enhancement |
 | `AIEnhancer` | SLM-based metadata enhancement for scanned modules |
 | `WriteResult` | Structured result type for all writer operations |
 | `WriteError` | Error class for I/O failures during write |

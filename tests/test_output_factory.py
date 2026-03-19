@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from apcore_toolkit.output import get_writer
+from apcore_toolkit.output.http_proxy_writer import HTTPProxyRegistryWriter
 from apcore_toolkit.output.python_writer import PythonWriter
 from apcore_toolkit.output.registry_writer import RegistryWriter
 from apcore_toolkit.output.yaml_writer import YAMLWriter
@@ -22,6 +23,10 @@ class TestGetWriter:
     def test_registry(self) -> None:
         writer = get_writer("registry")
         assert isinstance(writer, RegistryWriter)
+
+    def test_http_proxy(self) -> None:
+        writer = get_writer("http-proxy", base_url="http://localhost:8000")
+        assert isinstance(writer, HTTPProxyRegistryWriter)
 
     def test_unknown_format(self) -> None:
         with pytest.raises(ValueError, match="Unknown output format"):

@@ -5,6 +5,11 @@ Provides a factory function to obtain a writer by format name.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from apcore_toolkit.output.http_proxy_writer import HTTPProxyRegistryWriter
+
 from apcore_toolkit.output.errors import WriteError as WriteError
 from apcore_toolkit.output.python_writer import PythonWriter
 from apcore_toolkit.output.registry_writer import RegistryWriter
@@ -19,11 +24,16 @@ from apcore_toolkit.output.verifiers import YAMLVerifier as YAMLVerifier
 from apcore_toolkit.output.yaml_writer import YAMLWriter
 
 
-def get_writer(output_format: str) -> YAMLWriter | PythonWriter | RegistryWriter:
+def get_writer(
+    output_format: str, **kwargs: Any
+) -> YAMLWriter | PythonWriter | RegistryWriter | HTTPProxyRegistryWriter:
     """Return a writer instance for the given output format.
 
     Args:
-        output_format: Output format name (``"yaml"``, ``"python"``, or ``"registry"``).
+        output_format: Output format name (``"yaml"``, ``"python"``,
+            ``"registry"``, or ``"http-proxy"``).
+        **kwargs: Passed to the writer constructor. For ``"http-proxy"``:
+            ``base_url``, ``auth_header_factory``, ``timeout``.
 
     Returns:
         A writer instance.
@@ -37,4 +47,8 @@ def get_writer(output_format: str) -> YAMLWriter | PythonWriter | RegistryWriter
         return PythonWriter()
     if output_format == "registry":
         return RegistryWriter()
+    if output_format == "http-proxy":
+        from apcore_toolkit.output.http_proxy_writer import HTTPProxyRegistryWriter
+
+        return HTTPProxyRegistryWriter(**kwargs)
     raise ValueError(f"Unknown output format: {output_format!r}")

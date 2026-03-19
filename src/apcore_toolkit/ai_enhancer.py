@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from dataclasses import replace
-from typing import Any
+from typing import Any, Protocol
 
 from apcore import ModuleAnnotations
 
@@ -28,6 +28,16 @@ _DEFAULT_THRESHOLD = 0.7
 _DEFAULT_BATCH_SIZE = 5
 _DEFAULT_TIMEOUT = 30
 _DEFAULT_ANNOTATIONS = ModuleAnnotations()
+
+
+class Enhancer(Protocol):
+    """Protocol for pluggable metadata enhancement.
+
+    Any class implementing this protocol can be used to fill metadata gaps
+    in scanned modules. See the AI Enhancement Guide for details.
+    """
+
+    def enhance(self, modules: list[ScannedModule]) -> list[ScannedModule]: ...
 
 
 class AIEnhancer:

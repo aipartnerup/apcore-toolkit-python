@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-19
+
+### Added
+
+- `_deep_resolve_refs()` — recursive `$ref` resolution for nested OpenAPI schemas,
+  handling `allOf`/`anyOf`/`oneOf`, `items`, and `properties`. Depth-limited to 16
+  levels to prevent infinite recursion on circular references.
+- `Enhancer` protocol — pluggable interface for metadata enhancement, allowing
+  custom enhancers beyond the built-in `AIEnhancer`.
+- `HTTPProxyRegistryWriter` — registers scanned modules as HTTP proxy classes
+  that forward requests to a running web API. Supports path parameter substitution,
+  pluggable auth headers, and `2xx` success range (with `204` returning `{}`).
+  Requires optional `httpx` dependency (`pip install apcore-toolkit[http-proxy]`).
+- `get_writer("http-proxy", base_url=...)` — factory support for the new
+  HTTP proxy writer with `**kwargs` forwarding.
+- Expanded `__init__.py` public API: exports `Enhancer`, `HTTPProxyRegistryWriter`,
+  `WriteError`, `Verifier`, `VerifyResult`, verifier classes, serializer functions,
+  `resolve_ref`, `resolve_schema`, `extract_input_schema`, `extract_output_schema`,
+  and `run_verifier_chain`.
+
+### Fixed
+
+- `extract_output_schema()` — now recursively resolves all nested `$ref` pointers
+  (previously only handled the shallow case of array items with `$ref`).
+- `extract_input_schema()` — now recursively resolves `$ref` inside individual
+  properties after assembly.
+- `get_writer()` return type annotation now includes `HTTPProxyRegistryWriter`.
+
+### Tests
+
+- 272 tests (up from 260), all passing
+- Added `TestDeepResolveRefs` (8 tests): top-level ref, nested properties,
+  allOf/anyOf, array items, deeply nested refs, circular ref depth limit,
+  immutability guarantee
+- Added nested `$ref` tests for `extract_input_schema` and `extract_output_schema`
+- Added `test_http_proxy` for `get_writer("http-proxy")` factory
+
+---
+
 ## [0.2.0] - 2026-03-11
 
 ### Added

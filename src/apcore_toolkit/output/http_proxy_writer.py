@@ -1,0 +1,185 @@
+"""HTTP proxy registry writer.
+
+Registers scanned modules as HTTP proxy classes that forward requests
+to a running web API. This enables CLI execution without invoking
+route handlers directly (which depend on framework DI systems).
+
+Requires the ``httpx`` optional dependency::
+
+    pip install apcore-toolkit[http-proxy]
+
+Usage::
+
+    from apcore_toolkit.output.http_proxy_writer import HTTPProxyRegistryWriter
+
+    writer = HTTPProxyRegistryWriter(
+        base_url="http://localhost:8000",
+        auth_header_factory=lambda: {"Authorization": "Bearer xxx"},
+    )
+    results = writer.write(modules, registry)
+
+The writer reads ``http_method`` and ``url_path`` from each
+``ScannedModule.metadata`` dict (the framework-agnostic convention).
+Framework-specific ``ScannedModule`` subclasses with top-level
+``http_method`` / ``url_path`` attributes are also supported.
+"""
+
+import logging
+import re
+from collections.abc import Callable
+from typing import Any
+
+from apcore import ModuleAnnotations, Registry
+from apcore_toolkit.output.types import WriteResult
+from apcore_toolkit.types import ScannedModule
+
+logger = logging.getLogger("apcore_toolkit")
+
+
+def _get_http_fields(mod: Any) -> tuple[str, str]:
+    """Extract http_method and url_path from a ScannedModule.
+
+    Supports both:
+    - Toolkit ScannedModule (fields in ``metadata`` dict)
+    - Framework-specific ScannedModule (top-level attributes)
+    """
+    http_method = getattr(mod, "http_method", None) or mod.metadata.get("http_method", "GET")
+    url_path = getattr(mod, "url_path", None) or mod.metadata.get("url_path", "/")
+    return str(http_method), str(url_path)
+
+
+class HTTPProxyRegistryWriter:
+    """Register scanned modules as HTTP proxy classes in the registry.
+
+    Each module's ``execute()`` sends an HTTP request to the target API
+    instead of calling the route handler directly.
+
+    Args:
+        base_url: Base URL of the target API (e.g. ``http://localhost:8000``).
+        auth_header_factory: Optional callable returning HTTP headers for
+            authentication (e.g. ``{"Authorization": "Bearer xxx"}``).
+            Called once per request.
+        timeout: HTTP request timeout in seconds.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        auth_header_factory: Callable[[], dict[str, str]] | None = None,
+        timeout: float = 60.0,
+    ) -> None:
+        self._base_url = base_url
+        self._auth_header_factory = auth_header_factory
+        self._timeout = timeout
+
+    def write(
+        self,
+        modules: list[ScannedModule],
+        registry: Registry,
+    ) -> list[WriteResult]:
+        """Register each ScannedModule as an HTTP proxy module."""
+        results: list[WriteResult] = []
+        for mod in modules:
+            try:
+                module_instance = self._build_module_class(mod)()
+                registry.register(mod.module_id, module_instance)
+                results.append(WriteResult(module_id=mod.module_id, path=None, verified=True))
+            except Exception as exc:
+                logger.debug("Skipped %s: %s", mod.module_id, exc)
+                results.append(
+                    WriteResult(
+                        module_id=mod.module_id,
+                        path=None,
+                        verified=False,
+                        verification_error=str(exc),
+                    )
+                )
+        return results
+
+    def _build_module_class(self, mod: ScannedModule) -> type:
+        """Build a module class with HTTP proxy execute method."""
+        http_method, url_path = _get_http_fields(mod)
+        path_params = set(re.findall(r"\{(\w+)\}", url_path))
+        base_url = self._base_url
+        auth_factory = self._auth_header_factory
+        timeout = self._timeout
+
+        annotations = mod.annotations or ModuleAnnotations()
+
+        # Raw dict schemas are auto-wrapped by Registry._ensure_schema_adapter
+        # (apcore >= 0.13.1) during register(), so no manual wrapping needed.
+        raw_input = dict(mod.input_schema)
+        raw_output = dict(mod.output_schema)
+
+        class ProxyModule:
+            input_schema = raw_input
+            output_schema = raw_output
+            description = mod.description
+            documentation = mod.documentation
+
+            async def execute(self, inputs: dict[str, Any], ctx: Any = None) -> dict[str, Any]:
+                import httpx as _httpx
+
+                headers: dict[str, str] = {}
+                if auth_factory is not None:
+                    headers.update(auth_factory())
+
+                actual_path = url_path
+                query: dict[str, Any] = {}
+                body: dict[str, Any] = {}
+
+                for key, value in inputs.items():
+                    if key in path_params:
+                        actual_path = actual_path.replace(f"{{{key}}}", str(value))
+                    elif http_method == "GET":
+                        query[key] = value
+                    else:
+                        body[key] = value
+
+                kwargs: dict[str, Any] = {}
+                if query:
+                    kwargs["params"] = query
+                if body and http_method in ("POST", "PUT", "PATCH"):
+                    kwargs["json"] = body
+
+                transport = _httpx.AsyncHTTPTransport(retries=0)
+                async with _httpx.AsyncClient(transport=transport, base_url=base_url, timeout=timeout) as client:
+                    resp = await client.request(http_method, actual_path, headers=headers, **kwargs)
+
+                if 200 <= resp.status_code < 300:
+                    if resp.status_code == 204:
+                        return {}
+                    return resp.json()  # type: ignore[no-any-return]
+
+                error_msg = _extract_error_message(resp)
+                from apcore.errors import ModuleError
+
+                raise ModuleError(
+                    code=f"HTTP_{resp.status_code}",
+                    message=error_msg,
+                )
+
+        ProxyModule.__name__ = mod.module_id.replace(".", "_")
+        ProxyModule.__qualname__ = ProxyModule.__name__
+        ProxyModule.annotations = annotations  # type: ignore[assignment]
+        ProxyModule.tags = mod.tags  # type: ignore[attr-defined]
+
+        return ProxyModule
+
+
+def _extract_error_message(resp: Any) -> str:
+    """Extract a human-readable error message from an HTTP error response."""
+    content_type = resp.headers.get("content-type", "")
+    if content_type.startswith("application/json"):
+        try:
+            body = resp.json()
+            return (
+                body.get("error_message")
+                or body.get("detail")
+                or body.get("error")
+                or body.get("message")
+                or resp.text[:200]
+            )
+        except Exception:
+            pass
+    return resp.text[:200]

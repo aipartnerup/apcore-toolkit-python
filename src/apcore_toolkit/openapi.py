@@ -48,6 +48,43 @@ def resolve_schema(
     return schema
 
 
+def _deep_resolve_refs(
+    schema: dict[str, Any],
+    openapi_doc: dict[str, Any],
+    _depth: int = 0,
+) -> dict[str, Any]:
+    """Recursively resolve all ``$ref`` pointers in a schema.
+
+    Handles nested ``$ref``, ``allOf``, ``anyOf``, ``oneOf``, and ``items``.
+    Depth-limited to 16 levels to prevent infinite recursion.
+    """
+    if _depth > 16:
+        return schema
+
+    if "$ref" in schema:
+        resolved = resolve_ref(schema["$ref"], openapi_doc)
+        return _deep_resolve_refs(resolved, openapi_doc, _depth + 1)
+
+    result = dict(schema)
+
+    # Resolve inside allOf/anyOf/oneOf
+    for key in ("allOf", "anyOf", "oneOf"):
+        if key in result and isinstance(result[key], list):
+            result[key] = [_deep_resolve_refs(item, openapi_doc, _depth + 1) for item in result[key]]
+
+    # Resolve array items
+    if "items" in result and isinstance(result["items"], dict):
+        result["items"] = _deep_resolve_refs(result["items"], openapi_doc, _depth + 1)
+
+    # Resolve nested properties
+    if "properties" in result and isinstance(result["properties"], dict):
+        result["properties"] = {
+            k: _deep_resolve_refs(v, openapi_doc, _depth + 1) for k, v in result["properties"].items()
+        }
+
+    return result
+
+
 def extract_input_schema(
     operation: dict[str, Any],
     openapi_doc: dict[str, Any] | None = None,
@@ -90,6 +127,11 @@ def extract_input_schema(
         schema["properties"].update(body_schema.get("properties", {}))
         schema["required"].extend(body_schema.get("required", []))
 
+    # Recursively resolve $ref inside individual properties
+    if openapi_doc:
+        for prop_name, prop_schema in list(schema["properties"].items()):
+            schema["properties"][prop_name] = _deep_resolve_refs(prop_schema, openapi_doc)
+
     return schema
 
 
@@ -114,9 +156,9 @@ def extract_output_schema(
         if "schema" in json_content:
             schema: dict[str, Any] = json_content["schema"]
             schema = resolve_schema(schema, openapi_doc)
-            # Handle array with $ref items
-            if schema.get("type") == "array" and "$ref" in schema.get("items", {}):
-                schema["items"] = resolve_schema(schema["items"], openapi_doc)
+            # Recursively resolve all nested $ref pointers
+            if openapi_doc:
+                schema = _deep_resolve_refs(schema, openapi_doc)
             return schema
 
     return {"type": "object", "properties": {}}
