@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/aipartnerup/apcore-toolkit/main/apcore-toolkit-logo.svg" alt="apcore-toolkit logo" width="200"/>
+  <img src="https://raw.githubusercontent.com/aiperceivable/apcore-toolkit/main/apcore-toolkit-logo.svg" alt="apcore-toolkit logo" width="200"/>
 </div>
 
 # apcore-toolkit-python
 
-Python implementation of the [apcore-toolkit](https://github.com/aipartnerup/apcore-toolkit).
+Python implementation of the [apcore-toolkit](https://github.com/aiperceivable/apcore-toolkit).
 
 Extracts ~1,400 lines of duplicated framework-agnostic logic from `django-apcore` and `flask-apcore` into a standalone Python package.
 
@@ -145,7 +145,7 @@ md = to_markdown({"name": "Alice", "role": "admin"}, title="User Info")
 
 ## Documentation
 
-Full documentation is available at [https://github.com/aipartnerup/apcore-toolkit](https://github.com/aipartnerup/apcore-toolkit).
+Full documentation is available at [https://github.com/aiperceivable/apcore-toolkit](https://github.com/aiperceivable/apcore-toolkit).
 
 ## License
 

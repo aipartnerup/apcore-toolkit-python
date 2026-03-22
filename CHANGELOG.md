@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-03-22
+
+### Changed
+- Rebrand: aipartnerup → aiperceivable
+
 ## [0.3.0] - 2026-03-19
 
 ### Added
