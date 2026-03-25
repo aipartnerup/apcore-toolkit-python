@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-03-25
+
+### Added
+
+- **`deep_resolve_refs()`** — public API for recursive `$ref` resolution in OpenAPI schemas (previously internal `_deep_resolve_refs`). Resolves nested `allOf`/`anyOf`/`oneOf`, `items`, and `properties`. Depth-limited to 16 levels.
+
+### Fixed
+
+- README: apcore dependency version updated from `>= 0.13.1` to `>= 0.14.0` (matches pyproject.toml).
+- README: Core Modules table now lists all public API functions (added 10 missing entries).
+
 ## [0.4.0] - 2026-03-23
 
 ### Added

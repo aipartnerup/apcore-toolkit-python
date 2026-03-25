@@ -85,6 +85,27 @@ def _deep_resolve_refs(
     return result
 
 
+def deep_resolve_refs(
+    schema: dict[str, Any],
+    openapi_doc: dict[str, Any],
+    depth: int = 0,
+) -> dict[str, Any]:
+    """Recursively resolve all ``$ref`` pointers in a schema.
+
+    Handles nested ``$ref``, ``allOf``, ``anyOf``, ``oneOf``, and ``items``.
+    Depth-limited to 16 levels to prevent infinite recursion on circular refs.
+
+    Args:
+        schema: A JSON Schema dict (possibly containing ``$ref`` pointers).
+        openapi_doc: The full OpenAPI document dict.
+        depth: Current recursion depth (callers should not set this).
+
+    Returns:
+        A new schema dict with all ``$ref`` pointers resolved.
+    """
+    return _deep_resolve_refs(schema, openapi_doc, depth)
+
+
 def extract_input_schema(
     operation: dict[str, Any],
     openapi_doc: dict[str, Any] | None = None,

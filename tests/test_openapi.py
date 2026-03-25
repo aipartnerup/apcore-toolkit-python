@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from apcore_toolkit.openapi import (
     _deep_resolve_refs,
+    deep_resolve_refs,
     extract_input_schema,
     extract_output_schema,
     resolve_ref,
@@ -166,6 +167,101 @@ class TestDeepResolveRefs:
         schema = {"$ref": "#/components/schemas/UserWithAddress"}
         _deep_resolve_refs(schema, OPENAPI_DOC)
         assert OPENAPI_DOC["components"]["schemas"]["Address"]["properties"] == original_props
+
+
+class TestDeepResolveRefsPublic:
+    """Tests for the public deep_resolve_refs wrapper."""
+
+    def test_top_level_ref(self) -> None:
+        schema = {"$ref": "#/components/schemas/User"}
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["type"] == "object"
+        assert "id" in result["properties"]
+        assert "name" in result["properties"]
+
+    def test_nested_ref_in_properties(self) -> None:
+        schema = {
+            "type": "object",
+            "properties": {
+                "address": {"$ref": "#/components/schemas/Address"},
+            },
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["properties"]["address"]["type"] == "object"
+        assert "street" in result["properties"]["address"]["properties"]
+
+    def test_ref_in_allof(self) -> None:
+        schema = {
+            "allOf": [
+                {"$ref": "#/components/schemas/User"},
+                {"type": "object", "properties": {"extra": {"type": "boolean"}}},
+            ]
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["allOf"][0]["type"] == "object"
+        assert "id" in result["allOf"][0]["properties"]
+
+    def test_ref_in_anyof(self) -> None:
+        schema = {
+            "anyOf": [
+                {"$ref": "#/components/schemas/User"},
+                {"$ref": "#/components/schemas/Address"},
+            ]
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert "name" in result["anyOf"][0]["properties"]
+        assert "street" in result["anyOf"][1]["properties"]
+
+    def test_ref_in_oneof(self) -> None:
+        schema = {
+            "oneOf": [
+                {"$ref": "#/components/schemas/User"},
+                {"$ref": "#/components/schemas/Address"},
+            ]
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["oneOf"][0]["type"] == "object"
+        assert "name" in result["oneOf"][0]["properties"]
+        assert "city" in result["oneOf"][1]["properties"]
+
+    def test_ref_in_array_items(self) -> None:
+        schema = {"type": "array", "items": {"$ref": "#/components/schemas/User"}}
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["items"]["type"] == "object"
+        assert "id" in result["items"]["properties"]
+
+    def test_deeply_nested_ref(self) -> None:
+        result = deep_resolve_refs({"$ref": "#/components/schemas/UserWithAddress"}, OPENAPI_DOC)
+        assert result["properties"]["address"]["type"] == "object"
+        assert "street" in result["properties"]["address"]["properties"]
+
+    def test_circular_ref_depth_limit(self) -> None:
+        result = deep_resolve_refs({"$ref": "#/components/schemas/SelfRef"}, OPENAPI_DOC)
+        assert result["type"] == "object"
+        assert "child" in result["properties"]
+
+    def test_no_mutation_of_original(self) -> None:
+        original_address = OPENAPI_DOC["components"]["schemas"]["Address"]
+        original_props = dict(original_address.get("properties", {}))
+        deep_resolve_refs({"$ref": "#/components/schemas/UserWithAddress"}, OPENAPI_DOC)
+        assert OPENAPI_DOC["components"]["schemas"]["Address"]["properties"] == original_props
+
+    def test_custom_depth_parameter(self) -> None:
+        """Passing depth=17 should short-circuit immediately."""
+        schema = {"$ref": "#/components/schemas/User"}
+        result = deep_resolve_refs(schema, OPENAPI_DOC, depth=17)
+        # Should return the unresolved schema since depth > 16
+        assert "$ref" in result
+
+    def test_plain_schema_no_refs(self) -> None:
+        schema = {"type": "string", "description": "A simple string"}
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result == {"type": "string", "description": "A simple string"}
+
+    def test_importable_from_package(self) -> None:
+        from apcore_toolkit import deep_resolve_refs as public_fn
+
+        assert callable(public_fn)
 
 
 class TestExtractInputSchema:

@@ -9,6 +9,7 @@ from apcore_toolkit.ai_enhancer import AIEnhancer, Enhancer
 from apcore_toolkit.display import DisplayResolver
 from apcore_toolkit.formatting import to_markdown
 from apcore_toolkit.openapi import (
+    deep_resolve_refs,
     extract_input_schema,
     extract_output_schema,
     resolve_ref,
@@ -62,6 +63,7 @@ __all__ = [
     "YAMLVerifier",
     "YAMLWriter",
     "annotations_to_dict",
+    "deep_resolve_refs",
     "enrich_schema_descriptions",
     "extract_input_schema",
     "extract_output_schema",

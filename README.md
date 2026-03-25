@@ -43,6 +43,15 @@ pip install apcore-toolkit
 | `get_writer` | Factory function for writer instances |
 | `DisplayResolver` | Sparse binding.yaml display overlay — resolves surface-facing alias, description, guidance, tags into `metadata["display"]` (§5.13) |
 | `ConventionScanner` | Scans a `commands/` directory of plain Python files for public functions and converts them to `ScannedModule` instances with schema inferred from type annotations (§5.14) |
+| `extract_input_schema` | Merges OpenAPI query, path, and request body params into a single JSON Schema |
+| `extract_output_schema` | Extracts response schema from OpenAPI operation objects |
+| `resolve_ref` | Resolves a single internal `$ref` JSON pointer |
+| `resolve_schema` | Resolves a top-level `$ref` in a schema |
+| `deep_resolve_refs` | Recursively resolves all `$ref` pointers, depth-limited to 16 levels |
+| `annotations_to_dict` | Converts `ModuleAnnotations` to a plain dict |
+| `module_to_dict` | Converts a `ScannedModule` to a dict for JSON/YAML serialization |
+| `modules_to_dicts` | Batch version of `module_to_dict` |
+| `run_verifier_chain` | Runs multiple verifiers in sequence, stopping on first failure |
 
 ## Usage
 
@@ -214,7 +223,7 @@ Input and output schemas are inferred from PEP 484 type annotations. Use `includ
 ## Requirements
 
 - Python >= 3.11
-- apcore >= 0.13.1
+- apcore >= 0.14.0
 - pydantic >= 2.0
 - PyYAML >= 6.0
 
