@@ -29,7 +29,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from apcore import ModuleAnnotations, Registry
+from apcore import DEFAULT_ANNOTATIONS, Registry
 from apcore_toolkit.output.types import WriteResult
 from apcore_toolkit.types import ScannedModule
 
@@ -104,7 +104,7 @@ class HTTPProxyRegistryWriter:
         auth_factory = self._auth_header_factory
         timeout = self._timeout
 
-        annotations = mod.annotations or ModuleAnnotations()
+        annotations = mod.annotations or DEFAULT_ANNOTATIONS
 
         # Raw dict schemas are auto-wrapped by Registry._ensure_schema_adapter
         # (apcore >= 0.13.1) during register(), so no manual wrapping needed.
@@ -152,11 +152,13 @@ class HTTPProxyRegistryWriter:
                     return resp.json()  # type: ignore[no-any-return]
 
                 error_msg = _extract_error_message(resp)
+                from apcore import ErrorCodes
                 from apcore.errors import ModuleError
 
                 raise ModuleError(
-                    code=f"HTTP_{resp.status_code}",
-                    message=error_msg,
+                    code=ErrorCodes.MODULE_EXECUTE_ERROR,
+                    message=f"HTTP {resp.status_code}: {error_msg}",
+                    details={"http_status": resp.status_code},
                 )
 
         ProxyModule.__name__ = mod.module_id.replace(".", "_")

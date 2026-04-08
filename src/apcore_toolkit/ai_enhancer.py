@@ -10,13 +10,16 @@ metadata dict for auditability.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
+import types
+import typing
 from dataclasses import replace
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
-from apcore import ModuleAnnotations
+from apcore import DEFAULT_ANNOTATIONS, ModuleAnnotations
 
 from apcore_toolkit.types import ScannedModule
 
@@ -27,7 +30,53 @@ _DEFAULT_MODEL = "qwen:0.6b"
 _DEFAULT_THRESHOLD = 0.7
 _DEFAULT_BATCH_SIZE = 5
 _DEFAULT_TIMEOUT = 30
-_DEFAULT_ANNOTATIONS = ModuleAnnotations()
+
+
+# SLM must never write to ModuleAnnotations.extra: it is reserved for adapter
+# extensions and is not user-facing semantic content.
+_SLM_EXCLUDED_ANNOTATION_FIELDS = frozenset({"extra"})
+
+
+def _build_annotation_field_validators() -> dict[str, Callable[[Any], bool]]:
+    """Derive per-field type validators from ``ModuleAnnotations`` at import time.
+
+    Introspecting the dataclass instead of hardcoding a whitelist ensures that
+    when apcore adds new annotation fields the AI Enhancer automatically picks
+    them up (still subject to confidence gating). ``extra`` is excluded so the
+    SLM cannot inject arbitrary keys via that escape hatch.
+
+    The order of ``isinstance`` checks matters: ``bool`` is a subclass of
+    ``int`` in Python, so a boolean must not be silently accepted as an int
+    field.
+    """
+    hints = typing.get_type_hints(ModuleAnnotations)
+    validators: dict[str, Callable[[Any], bool]] = {}
+    for field in dataclasses.fields(ModuleAnnotations):
+        if field.name in _SLM_EXCLUDED_ANNOTATION_FIELDS:
+            continue
+        hint = hints.get(field.name)
+        origin = typing.get_origin(hint)
+        # Strip Optional[X] / X | None — SLM returns concrete values, not None.
+        # PEP 604 (X | None) yields types.UnionType; typing.Optional yields typing.Union.
+        if origin is typing.Union or origin is types.UnionType:
+            args = [a for a in typing.get_args(hint) if a is not type(None)]
+            if len(args) == 1:
+                hint = args[0]
+                origin = typing.get_origin(hint)
+        if hint is bool:
+            validators[field.name] = lambda v: isinstance(v, bool)
+        elif hint is int:
+            validators[field.name] = lambda v: isinstance(v, int) and not isinstance(v, bool)
+        elif hint is str:
+            validators[field.name] = lambda v: isinstance(v, str)
+        elif origin in (list, tuple):
+            validators[field.name] = lambda v: isinstance(v, list)
+        else:
+            logger.debug("AIEnhancer: skipping ModuleAnnotations field %r with unsupported type %r", field.name, hint)
+    return validators
+
+
+_ANNOTATION_FIELD_VALIDATORS = _build_annotation_field_validators()
 
 
 class Enhancer(Protocol):
@@ -152,7 +201,7 @@ class AIEnhancer:
             gaps.append("description")
         if not module.documentation:
             gaps.append("documentation")
-        if module.annotations is None or module.annotations == _DEFAULT_ANNOTATIONS:
+        if module.annotations is None or module.annotations == DEFAULT_ANNOTATIONS:
             gaps.append("annotations")
         if not module.input_schema.get("properties"):
             gaps.append("input_schema")
@@ -186,65 +235,26 @@ class AIEnhancer:
             else:
                 warnings.append(f"Low confidence ({doc_conf:.2f}) for documentation — skipped. Review manually.")
 
-        # Apply annotations if above threshold
+        # Apply annotations if above threshold. Field set is derived from
+        # ModuleAnnotations at import time, so adding new fields upstream
+        # automatically widens what the SLM may populate (extra excluded).
         if "annotations" in gaps and "annotations" in parsed and isinstance(parsed["annotations"], dict):
             ann_data = parsed["annotations"]
             ann_conf = parsed.get("confidence", {})
             accepted: dict[str, Any] = {}
-            _BOOL_FIELDS = (
-                "readonly",
-                "destructive",
-                "idempotent",
-                "requires_approval",
-                "open_world",
-                "streaming",
-                "cacheable",
-                "paginated",
-            )
-            for field in _BOOL_FIELDS:
-                if field in ann_data and isinstance(ann_data[field], bool):
-                    field_conf = ann_conf.get(f"annotations.{field}", ann_conf.get(field, 0.0))
-                    confidence[f"annotations.{field}"] = field_conf
-                    if field_conf >= self.threshold:
-                        accepted[field] = ann_data[field]
-                    else:
-                        warnings.append(
-                            f"Low confidence ({field_conf:.2f}) for annotations.{field} — skipped. Review manually."
-                        )
-            # Handle non-boolean annotation fields
-            _INT_FIELDS = ("cache_ttl",)
-            for field in _INT_FIELDS:
-                if field in ann_data and isinstance(ann_data[field], int):
-                    field_conf = ann_conf.get(f"annotations.{field}", ann_conf.get(field, 0.0))
-                    confidence[f"annotations.{field}"] = field_conf
-                    if field_conf >= self.threshold:
-                        accepted[field] = ann_data[field]
-                    else:
-                        warnings.append(
-                            f"Low confidence ({field_conf:.2f}) for annotations.{field} — skipped. Review manually."
-                        )
-            _STR_FIELDS = ("pagination_style",)
-            for field in _STR_FIELDS:
-                if field in ann_data and isinstance(ann_data[field], str):
-                    field_conf = ann_conf.get(f"annotations.{field}", ann_conf.get(field, 0.0))
-                    confidence[f"annotations.{field}"] = field_conf
-                    if field_conf >= self.threshold:
-                        accepted[field] = ann_data[field]
-                    else:
-                        warnings.append(
-                            f"Low confidence ({field_conf:.2f}) for annotations.{field} — skipped. Review manually."
-                        )
-            if "cache_key_fields" in ann_data and isinstance(ann_data["cache_key_fields"], list):
-                field_conf = ann_conf.get("annotations.cache_key_fields", ann_conf.get("cache_key_fields", 0.0))
-                confidence["annotations.cache_key_fields"] = field_conf
+            for field_name, validate in _ANNOTATION_FIELD_VALIDATORS.items():
+                if field_name not in ann_data or not validate(ann_data[field_name]):
+                    continue
+                field_conf = ann_conf.get(f"annotations.{field_name}", ann_conf.get(field_name, 0.0))
+                confidence[f"annotations.{field_name}"] = field_conf
                 if field_conf >= self.threshold:
-                    accepted["cache_key_fields"] = ann_data["cache_key_fields"]
+                    accepted[field_name] = ann_data[field_name]
                 else:
                     warnings.append(
-                        f"Low confidence ({field_conf:.2f}) for annotations.cache_key_fields — skipped. Review manually."
+                        f"Low confidence ({field_conf:.2f}) for annotations.{field_name} — skipped. Review manually."
                     )
             if accepted:
-                base = module.annotations or ModuleAnnotations()
+                base = module.annotations or DEFAULT_ANNOTATIONS
                 updates["annotations"] = replace(base, **accepted)
 
         # Apply input_schema if above threshold

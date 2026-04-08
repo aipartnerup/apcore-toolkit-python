@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Any
 
-from apcore import ModuleAnnotations, parse_docstring
+from apcore import DEFAULT_ANNOTATIONS, ModuleAnnotations, parse_docstring
 from apcore_toolkit.types import ScannedModule
 
 
@@ -97,12 +97,12 @@ class BaseScanner(ABC):
         """
         method_upper = method.upper()
         if method_upper == "GET":
-            return ModuleAnnotations(readonly=True, cacheable=True)
+            return replace(DEFAULT_ANNOTATIONS, readonly=True, cacheable=True)
         elif method_upper == "DELETE":
-            return ModuleAnnotations(destructive=True)
+            return replace(DEFAULT_ANNOTATIONS, destructive=True)
         elif method_upper == "PUT":
-            return ModuleAnnotations(idempotent=True)
-        return ModuleAnnotations()
+            return replace(DEFAULT_ANNOTATIONS, idempotent=True)
+        return DEFAULT_ANNOTATIONS
 
     def deduplicate_ids(self, modules: list[ScannedModule]) -> list[ScannedModule]:
         """Resolve duplicate module IDs by appending _2, _3, etc.
