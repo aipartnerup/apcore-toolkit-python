@@ -417,3 +417,115 @@ def test_cli_implicit_module_id_no_warning(resolver: DisplayResolver, caplog) ->
     with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
         resolver.resolve([_mod("image.resize")])
     assert "image.resize" not in caplog.text or "CLI alias" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Dual-source suggested_alias resolution (field + metadata compat)
+# ---------------------------------------------------------------------------
+
+
+def _make_module(
+    module_id: str = "tasks.user_data.post",
+    *,
+    suggested_alias: str | None = None,
+    metadata_alias: str | None = None,
+) -> ScannedModule:
+    from typing import Any
+
+    metadata: dict[str, Any] = {}
+    if metadata_alias is not None:
+        metadata["suggested_alias"] = metadata_alias
+    return ScannedModule(
+        module_id=module_id,
+        description="x",
+        input_schema={"type": "object", "properties": {}},
+        output_schema={"type": "object", "properties": {}},
+        tags=[],
+        target="mod:func",
+        suggested_alias=suggested_alias,
+        metadata=metadata,
+    )
+
+
+class TestSuggestedAliasDualSource:
+    def setup_method(self) -> None:
+        self.resolver = DisplayResolver()
+
+    def test_field_only(self) -> None:
+        mod = _make_module(suggested_alias="tasks.user_data.create")
+        [resolved] = self.resolver.resolve([mod])
+        assert resolved.metadata["display"]["alias"] == "tasks.user_data.create"
+
+    def test_metadata_only(self) -> None:
+        mod = _make_module(metadata_alias="tasks.user_data.legacy")
+        [resolved] = self.resolver.resolve([mod])
+        assert resolved.metadata["display"]["alias"] == "tasks.user_data.legacy"
+
+    def test_field_precedence_over_metadata(self) -> None:
+        mod = _make_module(
+            suggested_alias="tasks.user_data.create",
+            metadata_alias="tasks.user_data.legacy",
+        )
+        [resolved] = self.resolver.resolve([mod])
+        assert resolved.metadata["display"]["alias"] == "tasks.user_data.create"
+
+    def test_neither_source_falls_through_to_module_id(self) -> None:
+        mod = _make_module(module_id="tasks.user_data.post")
+        [resolved] = self.resolver.resolve([mod])
+        assert resolved.metadata["display"]["alias"] == "tasks.user_data.post"
+
+    def test_empty_string_field_falls_through_to_metadata(self) -> None:
+        mod = _make_module(
+            suggested_alias="",
+            metadata_alias="tasks.user_data.legacy",
+        )
+        [resolved] = self.resolver.resolve([mod])
+        assert resolved.metadata["display"]["alias"] == "tasks.user_data.legacy"
+
+    def test_none_field_falls_through_to_metadata(self) -> None:
+        mod = _make_module(
+            suggested_alias=None,
+            metadata_alias="tasks.user_data.legacy",
+        )
+        [resolved] = self.resolver.resolve([mod])
+        assert resolved.metadata["display"]["alias"] == "tasks.user_data.legacy"
+
+    def test_binding_alias_still_wins(self) -> None:
+        # display.alias from binding.yaml overrides suggested_alias.
+        mod = _make_module(suggested_alias="tasks.user_data.create")
+        binding_data = {
+            "bindings": [
+                {
+                    "module_id": "tasks.user_data.post",
+                    "display": {
+                        "alias": "tasks.user-data.search",
+                        "cli": {"alias": "tasks.user-data.search"},
+                    },
+                }
+            ]
+        }
+        [resolved] = self.resolver.resolve([mod], binding_data=binding_data)
+        # Cross-surface default alias comes from display.alias.
+        assert resolved.metadata["display"]["alias"] == "tasks.user-data.search"
+        # CLI surface-specific alias is the same.
+        assert resolved.metadata["display"]["cli"]["alias"] == "tasks.user-data.search"
+
+    def test_getattr_handles_missing_attribute(self) -> None:
+        # Defensive: dataclass-like object without the suggested_alias attribute.
+        # The resolver's getattr(mod, "suggested_alias", None) must not raise.
+        from dataclasses import dataclass, field
+        from typing import Any
+
+        @dataclass
+        class FakeMod:
+            module_id: str = "foo.bar"
+            description: str = "x"
+            documentation: str | None = None
+            tags: list[str] = field(default_factory=list)
+            metadata: dict[str, Any] = field(
+                default_factory=lambda: {"suggested_alias": "foo.bar.list"}
+            )
+
+        [resolved] = self.resolver.resolve([FakeMod()])
+        # Falls through to metadata since getattr defaults to None.
+        assert resolved.metadata["display"]["alias"] == "foo.bar.list"

@@ -32,6 +32,12 @@ from apcore_toolkit.output.verifiers import (
 from apcore_toolkit.output.yaml_writer import YAMLWriter
 from apcore_toolkit.pydantic_utils import flatten_pydantic_params, resolve_target
 from apcore_toolkit.convention_scanner import ConventionScanner
+from apcore_toolkit.http_verb_map import (
+    SCANNER_VERB_MAP,
+    generate_suggested_alias,
+    has_path_params,
+    resolve_http_verb,
+)
 from apcore_toolkit.scanner import BaseScanner
 from apcore_toolkit.schema_utils import enrich_schema_descriptions
 from apcore_toolkit.serializers import annotations_to_dict, module_to_dict, modules_to_dicts
@@ -54,6 +60,7 @@ __all__ = [
     "PythonWriter",
     "RegistryVerifier",
     "RegistryWriter",
+    "SCANNER_VERB_MAP",
     "ScannedModule",
     "SyntaxVerifier",
     "Verifier",
@@ -68,9 +75,12 @@ __all__ = [
     "extract_input_schema",
     "extract_output_schema",
     "flatten_pydantic_params",
+    "generate_suggested_alias",
     "get_writer",
+    "has_path_params",
     "module_to_dict",
     "modules_to_dicts",
+    "resolve_http_verb",
     "resolve_ref",
     "resolve_schema",
     "resolve_target",

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "post_collection",
+    "path": "/tasks/user_data",
+    "method": "POST",
+    "expected_alias": "tasks.user_data.create",
+    "description": "POST to collection route maps to create"
+  },
+  {
+    "id": "get_collection",
+    "path": "/tasks/user_data",
+    "method": "GET",
+    "expected_alias": "tasks.user_data.list",
+    "description": "GET on collection (no path params) maps to list"
+  },
+  {
+    "id": "get_single_brace",
+    "path": "/tasks/user_data/{id}",
+    "method": "GET",
+    "expected_alias": "tasks.user_data.get",
+    "description": "GET single resource (brace param) maps to get"
+  },
+  {
+    "id": "get_single_colon",
+    "path": "/tasks/user_data/:id",
+    "method": "GET",
+    "expected_alias": "tasks.user_data.get",
+    "description": "GET single resource (colon param, Express/NestJS style) maps to get"
+  },
+  {
+    "id": "put_single",
+    "path": "/tasks/user_data/{id}",
+    "method": "PUT",
+    "expected_alias": "tasks.user_data.update",
+    "description": "PUT single resource maps to update"
+  },
+  {
+    "id": "patch_single",
+    "path": "/tasks/user_data/{id}",
+    "method": "PATCH",
+    "expected_alias": "tasks.user_data.patch",
+    "description": "PATCH single resource maps to patch"
+  },
+  {
+    "id": "delete_single",
+    "path": "/tasks/user_data/{id}",
+    "method": "DELETE",
+    "expected_alias": "tasks.user_data.delete",
+    "description": "DELETE single resource maps to delete"
+  },
+  {
+    "id": "custom_action",
+    "path": "/tasks/{id}/archive",
+    "method": "POST",
+    "expected_alias": "tasks.archive.create",
+    "description": "Non-CRUD action: path params stripped, verb appended"
+  },
+  {
+    "id": "versioned_api",
+    "path": "/api/v2/users",
+    "method": "GET",
+    "expected_alias": "api.v2.users.list",
+    "description": "Versioned API path preserves version segment"
+  },
+  {
+    "id": "single_segment",
+    "path": "/health",
+    "method": "GET",
+    "expected_alias": "health.list",
+    "description": "Single segment collection maps to list"
+  },
+  {
+    "id": "root_path",
+    "path": "/",
+    "method": "GET",
+    "expected_alias": "list",
+    "description": "Root path with no segments returns only the verb"
+  },
+  {
+    "id": "nested_resources",
+    "path": "/orgs/{org_id}/teams/{team_id}/members",
+    "method": "GET",
+    "expected_alias": "orgs.teams.members.list",
+    "description": "Deeply nested resource strips all path params"
+  },
+  {
+    "id": "case_insensitive_method",
+    "path": "/tasks",
+    "method": "post",
+    "expected_alias": "tasks.create",
+    "description": "Lowercase method input normalized correctly"
+  },
+  {
+    "id": "unknown_method",
+    "path": "/tasks",
+    "method": "PURGE",
+    "expected_alias": "tasks.purge",
+    "description": "Unknown HTTP method lowercased as verb fallback"
+  }
+]

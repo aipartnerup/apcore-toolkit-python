@@ -27,6 +27,11 @@ class ScannedModule:
         version: Module version string.
         annotations: Behavioral annotations (readonly, destructive, etc.).
         documentation: Full docstring text for rich descriptions.
+        suggested_alias: Scanner-generated human-friendly alias used by
+            surface adapters in the resolve chain before falling back to
+            module_id. Scanners SHOULD set this using
+            ``BaseScanner.generate_suggested_alias()`` when the source
+            endpoint has HTTP route information. Defaults to ``None``.
         examples: Example invocations for documentation and testing.
         metadata: Arbitrary key-value data (e.g., http_method, url_rule).
         warnings: Non-fatal issues encountered during scanning.
@@ -41,6 +46,7 @@ class ScannedModule:
     version: str = "1.0.0"
     annotations: ModuleAnnotations | None = None
     documentation: str | None = None
+    suggested_alias: str | None = None
     examples: list[ModuleExample] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)

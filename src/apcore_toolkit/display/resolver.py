@@ -126,12 +126,23 @@ class DisplayResolver:
         return result
 
     def _resolve_one(self, mod: Any, binding_map: dict[str, dict[str, Any]]) -> Any:
-        """Resolve display fields for a single ScannedModule."""
+        """Resolve display fields for a single ScannedModule.
+
+        ``suggested_alias`` is read from two sources in priority order:
+
+        1. ``mod.suggested_alias`` (top-level field, preferred)
+        2. ``mod.metadata["suggested_alias"]`` (legacy fallback)
+
+        The top-level field takes precedence when set to a truthy value.
+        """
         entry = binding_map.get(mod.module_id, {})
         display_cfg: dict[str, Any] = entry.get("display") or {}
         binding_desc: str | None = entry.get("description")
         binding_docs: str | None = entry.get("documentation")
-        suggested_alias: str | None = (mod.metadata or {}).get("suggested_alias")
+        suggested_alias: str | None = (
+            getattr(mod, "suggested_alias", None)
+            or (mod.metadata or {}).get("suggested_alias")
+        )
 
         # ── Resolve cross-surface defaults ──────────────────────────────
         default_alias: str = display_cfg.get("alias") or suggested_alias or mod.module_id

@@ -163,6 +163,41 @@ class TestInferAnnotationsFromMethod:
         assert ann.destructive is False
 
 
+class TestGenerateSuggestedAlias:
+    def test_post_collection(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data", "POST")
+        assert result == "tasks.user_data.create"
+
+    def test_get_collection(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data", "GET")
+        assert result == "tasks.user_data.list"
+
+    def test_get_single(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data/{id}", "GET")
+        assert result == "tasks.user_data.get"
+
+    def test_delete_single(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data/{id}", "DELETE")
+        assert result == "tasks.user_data.delete"
+
+    def test_case_insensitive_method(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks", "post")
+        assert result == "tasks.create"
+
+    def test_root_path(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/", "GET")
+        assert result == "list"
+
+    def test_called_as_staticmethod(self) -> None:
+        # Works without instantiation.
+        assert BaseScanner.generate_suggested_alias("/users", "POST") == "users.create"
+
+    def test_called_on_subclass(self) -> None:
+        # Works via subclass access.
+        result = ConcreteScanner.generate_suggested_alias("/users", "POST")
+        assert result == "users.create"
+
+
 class TestExtractDocstring:
     def test_function_with_docstring(self) -> None:
         def sample():

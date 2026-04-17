@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import fields, replace
+from typing import Any
 
 from apcore import ModuleAnnotations, ModuleExample
 
@@ -26,8 +27,8 @@ class TestScannedModuleDefaults:
         assert annotated_module.metadata["http_method"] == "POST"
 
     def test_field_count(self) -> None:
-        """ScannedModule has exactly 12 fields."""
-        assert len(fields(ScannedModule)) == 12
+        """ScannedModule has exactly 13 fields."""
+        assert len(fields(ScannedModule)) == 13
 
     def test_mutable_defaults_are_independent(self) -> None:
         a = ScannedModule(
@@ -122,3 +123,42 @@ class TestExamplesField:
         )
         a.examples.append(ModuleExample(title="test", inputs={}, output={}))
         assert b.examples == []
+
+
+class TestSuggestedAlias:
+    def _make_base_module(self, **overrides: Any) -> ScannedModule:
+        defaults: dict[str, Any] = {
+            "module_id": "tasks.user_data.post",
+            "description": "Create task data",
+            "input_schema": {"type": "object", "properties": {}},
+            "output_schema": {"type": "object", "properties": {}},
+            "tags": [],
+            "target": "mod:func",
+        }
+        defaults.update(overrides)
+        return ScannedModule(**defaults)
+
+    def test_default_is_none(self) -> None:
+        mod = self._make_base_module()
+        assert mod.suggested_alias is None
+
+    def test_set_via_constructor(self) -> None:
+        mod = self._make_base_module(suggested_alias="tasks.user_data.create")
+        assert mod.suggested_alias == "tasks.user_data.create"
+
+    def test_explicit_none(self) -> None:
+        mod = self._make_base_module(suggested_alias=None)
+        assert mod.suggested_alias is None
+
+    def test_field_is_independent_of_metadata(self) -> None:
+        mod = self._make_base_module(
+            suggested_alias="field_value",
+            metadata={"suggested_alias": "metadata_value"},
+        )
+        assert mod.suggested_alias == "field_value"
+        assert mod.metadata["suggested_alias"] == "metadata_value"
+
+    def test_dataclasses_replace_preserves_field(self) -> None:
+        mod = self._make_base_module(suggested_alias="tasks.create")
+        new_mod = replace(mod, module_id="tasks.create_v2")
+        assert new_mod.suggested_alias == "tasks.create"
