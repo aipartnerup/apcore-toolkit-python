@@ -232,3 +232,25 @@ class TestAbstractInterface:
     def test_get_source_name(self) -> None:
         scanner = ConcreteScanner()
         assert scanner.get_source_name() == "test-scanner"
+
+
+class TestBaseScannerGenerateSuggestedAlias:
+    def test_delegates_to_http_verb_map(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data", "POST")
+        assert result == "tasks.user_data.create"
+
+    def test_get_collection(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data", "GET")
+        assert result == "tasks.user_data.list"
+
+    def test_get_single_resource(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks/user_data/{id}", "GET")
+        assert result == "tasks.user_data.get"
+
+    def test_accessible_on_subclass(self) -> None:
+        result = ConcreteScanner.generate_suggested_alias("/users", "POST")
+        assert result == "users.create"
+
+    def test_case_insensitive_method(self) -> None:
+        result = BaseScanner.generate_suggested_alias("/tasks", "post")
+        assert result == "tasks.create"
