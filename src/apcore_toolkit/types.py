@@ -54,6 +54,6 @@ class ScannedModule:
     examples: list[ModuleExample] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    # New in 0.5.0. Appended to preserve positional compatibility with
-    # pre-0.5.0 constructions that supplied the first 13 fields positionally.
+    # New in 0.5.0. Appended late in the release cycle; suggested_alias changed
+    # positional ordering in the same release, so keyword-only construction is expected.
     display: dict[str, Any] | None = None
