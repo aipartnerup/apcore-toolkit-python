@@ -195,6 +195,113 @@ class TestHTTPProxyRegistryWriter:
         finally:
             httpx.AsyncClient = original
 
+    def test_proxy_substitutes_colon_style_path_params(self) -> None:
+        """Regression: colon-style paths (:id) must substitute, not leak into query."""
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+
+        mod = _make_module(
+            module_id="test.get_item_colon.get",
+            http_method="GET",
+            url_path="/items/:item_id",
+            input_schema={
+                "type": "object",
+                "properties": {"item_id": {"type": "string"}},
+                "required": ["item_id"],
+            },
+        )
+        writer.write([mod], registry)
+
+        module_instance = registry._modules["test.get_item_colon.get"]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": "abc"}
+
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        import httpx
+
+        original = httpx.AsyncClient
+        httpx.AsyncClient = MagicMock(return_value=mock_client)
+        try:
+            asyncio.run(module_instance.execute({"item_id": "abc"}))
+            call_args = mock_client.request.call_args
+            assert call_args[0] == ("GET", "/items/abc")
+            assert "params" not in call_args[1] or call_args[1]["params"] == {}
+        finally:
+            httpx.AsyncClient = original
+
+    def test_delete_forwards_non_path_inputs_as_query(self) -> None:
+        """Regression: DELETE with non-path inputs must not silently drop them."""
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+
+        mod = _make_module(
+            module_id="test.bulk_delete.delete",
+            http_method="DELETE",
+            url_path="/items",
+            input_schema={
+                "type": "object",
+                "properties": {"ids": {"type": "string"}},
+            },
+        )
+        writer.write([mod], registry)
+
+        module_instance = registry._modules["test.bulk_delete.delete"]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 204
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        import httpx
+
+        original = httpx.AsyncClient
+        httpx.AsyncClient = MagicMock(return_value=mock_client)
+        try:
+            asyncio.run(module_instance.execute({"ids": "1,2,3"}))
+            call_args = mock_client.request.call_args
+            assert call_args[0] == ("DELETE", "/items")
+            # Non-path input must be forwarded somewhere — query is the
+            # conventional slot for non-body methods.
+            assert call_args[1].get("params") == {"ids": "1,2,3"}
+            assert "json" not in call_args[1]
+        finally:
+            httpx.AsyncClient = original
+
+    def test_write_failure_preserves_traceback(self, caplog, monkeypatch) -> None:
+        """When module construction fails, the warning log must carry exc_info
+        and the WriteResult error must include the exception class name."""
+        import logging
+
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+
+        def _boom(_mod):
+            raise RuntimeError("synthetic build failure")
+
+        monkeypatch.setattr(writer, "_build_module_class", _boom)
+
+        mod = _make_module("test.bad.get")
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            results = writer.write([mod], registry)
+
+        assert len(results) == 1
+        assert not results[0].verified
+        assert "RuntimeError" in (results[0].verification_error or "")
+        assert "synthetic build failure" in (results[0].verification_error or "")
+        failures = [r for r in caplog.records if "failed to register" in r.getMessage()]
+        assert failures, "expected at least one WARNING record for the failed module"
+        assert all(r.exc_info is not None for r in failures), (
+            "WARNING records for registration failures must carry exc_info"
+        )
+
     def test_no_auth_headers_when_factory_is_none(self) -> None:
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
         assert writer._auth_header_factory is None

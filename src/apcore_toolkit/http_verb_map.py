@@ -8,12 +8,15 @@ All functions are pure and do not raise exceptions.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 __all__ = [
     "SCANNER_VERB_MAP",
+    "extract_path_param_names",
     "generate_suggested_alias",
     "has_path_params",
     "resolve_http_verb",
+    "substitute_path_params",
 ]
 
 
@@ -37,6 +40,10 @@ considered immutable by convention; downstream code MUST NOT mutate it.
 
 
 _PATH_PARAM_RE: re.Pattern[str] = re.compile(r"\{[^}]+\}|:[a-zA-Z_]\w*")
+
+# Named-group regex used to extract parameter *names* (not the surrounding
+# punctuation). Mirrors _PATH_PARAM_RE but binds the name for substitution.
+_PATH_PARAM_NAMED_RE: re.Pattern[str] = re.compile(r"\{(?P<brace>[^}]+)\}|:(?P<colon>[a-zA-Z_]\w*)")
 
 
 def has_path_params(path: str) -> bool:
@@ -110,3 +117,49 @@ def generate_suggested_alias(path: str, method: str) -> str:
     is_single_resource = bool(raw_segments) and bool(_PATH_PARAM_RE.fullmatch(raw_segments[-1]))
     verb = resolve_http_verb(method, is_single_resource)
     return ".".join([*segments, verb])
+
+
+def extract_path_param_names(path: str) -> set[str]:
+    """Return the set of parameter *names* declared in a URL path.
+
+    Recognises both brace-style (``/users/{id}``) and colon-style
+    (``/users/:id``) placeholders, so the output is consistent across
+    frameworks that use different conventions.
+
+    Args:
+        path: URL path string.
+
+    Returns:
+        Set of parameter names with the surrounding punctuation stripped
+        (e.g., ``{"id", "org_id"}``).
+    """
+    names: set[str] = set()
+    for match in _PATH_PARAM_NAMED_RE.finditer(path):
+        name = match.group("brace") or match.group("colon")
+        if name:
+            names.add(name)
+    return names
+
+
+def substitute_path_params(path: str, values: dict[str, Any]) -> str:
+    """Substitute ``{name}`` and ``:name`` placeholders with ``values[name]``.
+
+    Keys in ``values`` that do not appear as placeholders are ignored. A
+    placeholder whose name is absent from ``values`` is left unchanged
+    (callers can detect the leftover via :func:`extract_path_param_names`).
+
+    Args:
+        path: URL path with placeholders.
+        values: Mapping from parameter name to substitution value.
+
+    Returns:
+        Path with all matching placeholders replaced by their values.
+    """
+
+    def _replace(match: re.Match[str]) -> str:
+        name = match.group("brace") or match.group("colon") or ""
+        if name in values:
+            return str(values[name])
+        return match.group(0)
+
+    return _PATH_PARAM_NAMED_RE.sub(_replace, path)

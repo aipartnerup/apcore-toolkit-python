@@ -25,15 +25,20 @@ Framework-specific ``ScannedModule`` subclasses with top-level
 """
 
 import logging
-import re
 from collections.abc import Callable
 from typing import Any
 
 from apcore import DEFAULT_ANNOTATIONS, Registry
+from apcore_toolkit.http_verb_map import extract_path_param_names, substitute_path_params
 from apcore_toolkit.output.types import WriteResult
 from apcore_toolkit.types import ScannedModule
 
 logger = logging.getLogger("apcore_toolkit")
+
+# Methods that conventionally carry a JSON body. Other methods (GET,
+# HEAD, DELETE, OPTIONS) forward non-path inputs via the query string
+# so they are not silently dropped.
+_BODY_METHODS: frozenset[str] = frozenset({"POST", "PUT", "PATCH"})
 
 
 def _get_http_fields(mod: Any) -> tuple[str, str]:
@@ -85,13 +90,17 @@ class HTTPProxyRegistryWriter:
                 registry.register(mod.module_id, module_instance)
                 results.append(WriteResult(module_id=mod.module_id, path=None, verified=True))
             except Exception as exc:
-                logger.debug("Skipped %s: %s", mod.module_id, exc)
+                logger.warning(
+                    "HTTPProxyRegistryWriter: failed to register %s",
+                    mod.module_id,
+                    exc_info=True,
+                )
                 results.append(
                     WriteResult(
                         module_id=mod.module_id,
                         path=None,
                         verified=False,
-                        verification_error=str(exc),
+                        verification_error=f"{type(exc).__name__}: {exc}",
                     )
                 )
         return results
@@ -99,7 +108,10 @@ class HTTPProxyRegistryWriter:
     def _build_module_class(self, mod: ScannedModule) -> type:
         """Build a module class with HTTP proxy execute method."""
         http_method, url_path = _get_http_fields(mod)
-        path_params = set(re.findall(r"\{(\w+)\}", url_path))
+        # Recognise both brace-style ({id}) and colon-style (:id) params,
+        # delegating to the canonical regex in http_verb_map so the two
+        # conventions do not drift apart.
+        path_params = extract_path_param_names(url_path)
         base_url = self._base_url
         auth_factory = self._auth_header_factory
         timeout = self._timeout
@@ -124,23 +136,22 @@ class HTTPProxyRegistryWriter:
                 if auth_factory is not None:
                     headers.update(auth_factory())
 
-                actual_path = url_path
-                query: dict[str, Any] = {}
-                body: dict[str, Any] = {}
+                # Separate path params from the rest; substitute both
+                # brace-style and colon-style placeholders via the shared
+                # helper so behaviour matches http_verb_map's extraction.
+                path_values = {k: v for k, v in inputs.items() if k in path_params}
+                actual_path = substitute_path_params(url_path, path_values)
+                non_path = {k: v for k, v in inputs.items() if k not in path_params}
 
-                for key, value in inputs.items():
-                    if key in path_params:
-                        actual_path = actual_path.replace(f"{{{key}}}", str(value))
-                    elif http_method == "GET":
-                        query[key] = value
-                    else:
-                        body[key] = value
-
+                # Body for POST/PUT/PATCH; query for everything else
+                # (GET/DELETE/HEAD/OPTIONS) so non-path inputs are never
+                # silently dropped.
                 kwargs: dict[str, Any] = {}
-                if query:
-                    kwargs["params"] = query
-                if body and http_method in ("POST", "PUT", "PATCH"):
-                    kwargs["json"] = body
+                if non_path:
+                    if http_method in _BODY_METHODS:
+                        kwargs["json"] = non_path
+                    else:
+                        kwargs["params"] = non_path
 
                 transport = _httpx.AsyncHTTPTransport(retries=0)
                 async with _httpx.AsyncClient(transport=transport, base_url=base_url, timeout=timeout) as client:
