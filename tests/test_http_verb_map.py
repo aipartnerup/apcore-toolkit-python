@@ -9,9 +9,11 @@ import pytest
 
 from apcore_toolkit.http_verb_map import (
     SCANNER_VERB_MAP,
+    extract_path_param_names,
     generate_suggested_alias,
     has_path_params,
     resolve_http_verb,
+    substitute_path_params,
 )
 
 _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "scanner_verb_map.json"
@@ -152,6 +154,68 @@ class TestGenerateSuggestedAlias:
 
     def test_param_only_path(self) -> None:
         assert generate_suggested_alias("/{id}", "GET") == "get"
+
+
+class TestExtractPathParamNames:
+    def test_brace_style(self) -> None:
+        assert extract_path_param_names("/tasks/{id}") == {"id"}
+
+    def test_colon_style(self) -> None:
+        assert extract_path_param_names("/users/:user_id") == {"user_id"}
+
+    def test_mixed_styles(self) -> None:
+        assert extract_path_param_names("/orgs/{org_id}/members/:member_id") == {"org_id", "member_id"}
+
+    def test_multiple_brace_params(self) -> None:
+        assert extract_path_param_names("/orgs/{org_id}/teams/{team_id}") == {"org_id", "team_id"}
+
+    def test_duplicate_param_names(self) -> None:
+        # Duplicate names (malformed path) — set de-duplicates.
+        assert extract_path_param_names("/{id}/{id}") == {"id"}
+
+    def test_no_params(self) -> None:
+        assert extract_path_param_names("/tasks/user_data") == set()
+
+    def test_empty_path(self) -> None:
+        assert extract_path_param_names("") == set()
+
+    def test_root_path(self) -> None:
+        assert extract_path_param_names("/") == set()
+
+    def test_reexported_from_package(self) -> None:
+        from apcore_toolkit import extract_path_param_names as pkg_fn
+
+        assert pkg_fn("/tasks/{id}") == {"id"}
+
+
+class TestSubstitutePathParams:
+    def test_brace_style(self) -> None:
+        assert substitute_path_params("/tasks/{id}", {"id": 42}) == "/tasks/42"
+
+    def test_colon_style(self) -> None:
+        assert substitute_path_params("/users/:user_id", {"user_id": "alice"}) == "/users/alice"
+
+    def test_mixed_styles(self) -> None:
+        result = substitute_path_params("/orgs/{org_id}/members/:mid", {"org_id": 1, "mid": "bob"})
+        assert result == "/orgs/1/members/bob"
+
+    def test_missing_key_left_intact(self) -> None:
+        # Placeholder absent from values is left in the path unchanged.
+        assert substitute_path_params("/tasks/{id}", {}) == "/tasks/{id}"
+
+    def test_extra_key_ignored(self) -> None:
+        assert substitute_path_params("/tasks/{id}", {"id": 5, "unused": "x"}) == "/tasks/5"
+
+    def test_value_coercion_to_str(self) -> None:
+        assert substitute_path_params("/{id}", {"id": 99}) == "/99"
+
+    def test_no_params_path_unchanged(self) -> None:
+        assert substitute_path_params("/tasks/data", {"id": 1}) == "/tasks/data"
+
+    def test_reexported_from_package(self) -> None:
+        from apcore_toolkit import substitute_path_params as pkg_fn
+
+        assert pkg_fn("/tasks/{id}", {"id": 7}) == "/tasks/7"
 
 
 class TestScannerVerbMapConstant:
