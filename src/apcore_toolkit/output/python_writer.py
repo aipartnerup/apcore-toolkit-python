@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from apcore_toolkit._type_mapping import JSON_SCHEMA_TO_PYTHON
 from apcore_toolkit.output.errors import WriteError
 from apcore_toolkit.output.types import Verifier, WriteResult
 from apcore_toolkit.output.verifiers import run_verifier_chain
@@ -23,15 +24,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("apcore_toolkit")
 
-# JSON Schema type to Python type mapping
-_TYPE_MAP: dict[str, str] = {
-    "string": "str",
-    "integer": "int",
-    "number": "float",
-    "boolean": "bool",
-    "array": "list",
-    "object": "dict",
-}
+# JSON Schema type to Python type mapping — sourced from shared _type_mapping module.
+_TYPE_MAP: dict[str, str] = JSON_SCHEMA_TO_PYTHON
 
 _MODULE_PATH_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
 

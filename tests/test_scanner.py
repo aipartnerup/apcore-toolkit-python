@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from apcore_toolkit.http_verb_map import generate_suggested_alias
 from apcore_toolkit.scanner import BaseScanner
 from apcore_toolkit.types import ScannedModule
 
@@ -165,36 +166,38 @@ class TestInferAnnotationsFromMethod:
 
 class TestGenerateSuggestedAlias:
     def test_post_collection(self) -> None:
-        result = BaseScanner.generate_suggested_alias("/tasks/user_data", "POST")
+        result = generate_suggested_alias("/tasks/user_data", "POST")
         assert result == "tasks.user_data.create"
 
     def test_get_collection(self) -> None:
-        result = BaseScanner.generate_suggested_alias("/tasks/user_data", "GET")
+        result = generate_suggested_alias("/tasks/user_data", "GET")
         assert result == "tasks.user_data.list"
 
     def test_get_single(self) -> None:
-        result = BaseScanner.generate_suggested_alias("/tasks/user_data/{id}", "GET")
+        result = generate_suggested_alias("/tasks/user_data/{id}", "GET")
         assert result == "tasks.user_data.get"
 
     def test_delete_single(self) -> None:
-        result = BaseScanner.generate_suggested_alias("/tasks/user_data/{id}", "DELETE")
+        result = generate_suggested_alias("/tasks/user_data/{id}", "DELETE")
         assert result == "tasks.user_data.delete"
 
     def test_case_insensitive_method(self) -> None:
-        result = BaseScanner.generate_suggested_alias("/tasks", "post")
+        result = generate_suggested_alias("/tasks", "post")
         assert result == "tasks.create"
 
     def test_root_path(self) -> None:
-        result = BaseScanner.generate_suggested_alias("/", "GET")
+        result = generate_suggested_alias("/", "GET")
         assert result == "list"
 
-    def test_called_as_staticmethod(self) -> None:
-        # Works without instantiation.
-        assert BaseScanner.generate_suggested_alias("/users", "POST") == "users.create"
+    def test_top_level_function(self) -> None:
+        # The top-level function is the canonical access path.
+        assert generate_suggested_alias("/users", "POST") == "users.create"
 
-    def test_called_on_subclass(self) -> None:
-        # Works via subclass access.
-        result = ConcreteScanner.generate_suggested_alias("/users", "POST")
+    def test_via_module_import(self) -> None:
+        # Also accessible via apcore_toolkit top-level import.
+        from apcore_toolkit import generate_suggested_alias as top_level_fn
+
+        result = top_level_fn("/users", "POST")
         assert result == "users.create"
 
 

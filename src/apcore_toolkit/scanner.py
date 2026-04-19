@@ -104,31 +104,6 @@ class BaseScanner(ABC):
             return replace(DEFAULT_ANNOTATIONS, idempotent=True)
         return DEFAULT_ANNOTATIONS
 
-    @staticmethod
-    def generate_suggested_alias(path: str, method: str) -> str:
-        """Generate a human-friendly suggested alias from HTTP route info.
-
-        Convenience wrapper that delegates to
-        :func:`apcore_toolkit.http_verb_map.generate_suggested_alias`.
-        Provided so scanner subclasses can call the toolkit helper through
-        the familiar ``BaseScanner`` interface.
-
-        Examples:
-            POST   /tasks/user_data       -> "tasks.user_data.create"
-            GET    /tasks/user_data       -> "tasks.user_data.list"
-            GET    /tasks/user_data/{id}  -> "tasks.user_data.get"
-
-        Args:
-            path: URL path (e.g., "/tasks/user_data/{id}").
-            method: HTTP method (e.g., "POST"). Case-insensitive.
-
-        Returns:
-            Dot-separated alias string.
-        """
-        from apcore_toolkit.http_verb_map import generate_suggested_alias as _impl
-
-        return _impl(path, method)
-
     def deduplicate_ids(self, modules: list[ScannedModule]) -> list[ScannedModule]:
         """Resolve duplicate module IDs by appending _2, _3, etc.
 

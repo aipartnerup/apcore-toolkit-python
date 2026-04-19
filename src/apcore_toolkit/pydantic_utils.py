@@ -32,7 +32,7 @@ def resolve_target(target: str) -> Any:
     """
     if ":" not in target:
         raise ValueError(f"Invalid target format: {target!r}. Expected 'module.path:qualname'.")
-    module_path, _, qualname = target.partition(":")
+    module_path, _, qualname = target.rpartition(":")
     mod = importlib.import_module(module_path)
     return getattr(mod, qualname)
 

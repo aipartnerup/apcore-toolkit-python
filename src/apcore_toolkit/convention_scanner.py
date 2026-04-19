@@ -10,18 +10,18 @@ import sys
 from pathlib import Path
 from typing import Any, get_type_hints
 
+import builtins
+
+from apcore_toolkit._type_mapping import PYTHON_TO_JSON_SCHEMA
 from apcore_toolkit.types import ScannedModule
 
 logger = logging.getLogger("apcore_toolkit")
 
 # Type hint → JSON Schema mapping (subset of §5.11.5)
+# Derived from the shared PYTHON_TO_JSON_SCHEMA vocabulary.
 _TYPE_MAP: dict[type, dict[str, Any]] = {
-    str: {"type": "string"},
-    int: {"type": "integer"},
-    float: {"type": "number"},
-    bool: {"type": "boolean"},
-    list: {"type": "array"},
-    dict: {"type": "object"},
+    getattr(builtins, name): {"type": json_type}
+    for name, json_type in PYTHON_TO_JSON_SCHEMA.items()
 }
 
 

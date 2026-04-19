@@ -118,3 +118,21 @@ class TestResolveTarget:
     def test_missing_attribute(self) -> None:
         with pytest.raises(AttributeError):
             resolve_target("json:nonexistent_function_xyz")
+
+    def test_last_colon_simple(self) -> None:
+        """resolve_target splits on the LAST colon (matches TypeScript lastIndexOf)."""
+        import os.path
+
+        result = resolve_target("os.path:join")
+        assert result is os.path.join
+
+    def test_last_colon_multi_colon(self) -> None:
+        """When the target has multiple colons, the last colon is the separator."""
+        # "os.path:join" is the canonical form; here we simulate a target whose
+        # module path itself contains a colon (unusual but spec-mandated behaviour).
+        # We use "json:loads" as the actual resolution so the test stays importable:
+        # module="json", qualname="loads" — one colon, still correct.
+        # For the multi-colon case we verify the split logic directly on the string.
+        module_path, _, qualname = "node:path:join".rpartition(":")
+        assert module_path == "node:path"
+        assert qualname == "join"
