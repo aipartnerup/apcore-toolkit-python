@@ -328,6 +328,19 @@ class TestExtractInputSchema:
         assert result["properties"] == {}
         assert result["required"] == []
 
+    def test_param_missing_name_is_skipped(self) -> None:
+        # A malformed OpenAPI param dict without a "name" key must not raise KeyError;
+        # it should be silently skipped so that valid params still appear in the schema.
+        operation = {
+            "parameters": [
+                {"in": "query", "schema": {"type": "string"}},  # no "name"
+                {"name": "valid_param", "in": "query", "schema": {"type": "integer"}},
+            ]
+        }
+        result = extract_input_schema(operation)
+        assert "valid_param" in result["properties"]
+        assert len(result["properties"]) == 1
+
 
 class TestExtractOutputSchema:
     def test_200_response(self) -> None:

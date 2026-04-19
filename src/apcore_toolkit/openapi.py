@@ -131,7 +131,9 @@ def extract_input_schema(
     # Query/path parameters
     for param in operation.get("parameters", []):
         if param.get("in") in ("query", "path"):
-            name = param["name"]
+            name = param.get("name")
+            if not name:
+                continue
             param_schema = param.get("schema", {"type": "string"})
             param_schema = resolve_schema(param_schema, openapi_doc)
             schema["properties"][name] = param_schema
