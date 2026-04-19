@@ -145,10 +145,7 @@ class TestGenerateSuggestedAlias:
         assert generate_suggested_alias("/api/v2/users", "GET") == "api.v2.users.list"
 
     def test_nested_params(self) -> None:
-        assert (
-            generate_suggested_alias("/orgs/{org_id}/teams/{team_id}/members", "GET")
-            == "orgs.teams.members.list"
-        )
+        assert generate_suggested_alias("/orgs/{org_id}/teams/{team_id}/members", "GET") == "orgs.teams.members.list"
 
     def test_double_slashes(self) -> None:
         assert generate_suggested_alias("//tasks//user_data//", "POST") == "tasks.user_data.create"

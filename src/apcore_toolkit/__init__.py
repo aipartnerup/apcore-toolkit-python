@@ -6,6 +6,7 @@ Public API re-exports for convenient access to core types and utilities.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _get_version
 from apcore_toolkit.ai_enhancer import AIEnhancer, Enhancer
+from apcore_toolkit.binding_loader import BindingLoader, BindingLoadError
 from apcore_toolkit.display import DisplayResolver
 from apcore_toolkit.formatting import to_markdown
 from apcore_toolkit.openapi import (
@@ -50,6 +51,8 @@ except PackageNotFoundError:
 
 __all__ = [
     "AIEnhancer",
+    "BindingLoadError",
+    "BindingLoader",
     "DisplayResolver",
     "BaseScanner",
     "ConventionScanner",

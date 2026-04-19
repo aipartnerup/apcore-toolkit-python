@@ -522,9 +522,7 @@ class TestSuggestedAliasDualSource:
             description: str = "x"
             documentation: str | None = None
             tags: list[str] = field(default_factory=list)
-            metadata: dict[str, Any] = field(
-                default_factory=lambda: {"suggested_alias": "foo.bar.list"}
-            )
+            metadata: dict[str, Any] = field(default_factory=lambda: {"suggested_alias": "foo.bar.list"})
 
         [resolved] = self.resolver.resolve([FakeMod()])
         # Falls through to metadata since getattr defaults to None.

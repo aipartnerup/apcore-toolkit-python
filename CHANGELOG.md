@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-04-19
+
+### Added
+
+- **`BindingLoader`** (`apcore_toolkit.binding_loader`) — parses `.binding.yaml` files back into `ScannedModule` objects, the inverse of `YAMLWriter`. Unlike `apcore.BindingLoader`, this is pure data: no target import, no Registry mutation. Enables verification, merging, diffing, and round-trip workflows.
+  - `load(path, *, strict=False)` — single file or directory of `*.binding.yaml`.
+  - `load_data(data, *, strict=False)` — pre-parsed YAML dict.
+  - Loose mode (default): only `module_id + target` required; missing fields use defaults.
+  - Strict mode: additionally requires `input_schema + output_schema`.
+  - `spec_version` validated; missing/unsupported versions WARN but do not fail.
+  - `annotations` parsed via `ModuleAnnotations.from_dict`; malformed values degrade to `None` with WARN.
+  - `examples` entries validated individually; malformed ones skipped with WARN.
+  - `BindingLoadError` exception carries `file_path`, `module_id`, `missing_fields`, `reason`.
+- **`ScannedModule.display`** — new top-level optional field (`dict | None`) holding the sparse display overlay for binding YAML persistence. Distinct from `metadata["display"]` (resolved form produced by `DisplayResolver`).
+- **New feature doc**: `docs/features/binding-loader.md`; `display-overlay.md` and `output-writers.md` updated.
+
+### Changed
+
+- **`YAMLWriter._build_binding`** — emits top-level `display:` key only when `ScannedModule.display is not None` (skip when None keeps output clean).
+- **`serializers.module_to_dict`** — includes `display` key in output.
+- **`AIEnhancer._build_prompt`** — confidence template is now built dynamically from `gaps`. When `annotations` is in gaps, the prompt requests per-field confidence for every `_ANNOTATION_FIELD_VALIDATORS` field (`annotations.readonly`, `annotations.streaming`, `annotations.cache_ttl`, ...). Previously the template hard-coded `{"description": 0.0, "documentation": 0.0}` only, causing all annotation-field confidence lookups to fall back to `0.0` and fail the threshold check — annotation enhancement silently never took effect. Fixes symmetry with `_enhance_module`'s `ann_conf.get(f"annotations.{field_name}", ...)` read path.
+
+### Dependencies
+
+- **`apcore >= 0.19.0`** — picks up the expanded `ModuleAnnotations` (12 fields incl. `streaming`, `cacheable`, `cache_ttl`, `cache_key_fields`, `paginated`, `pagination_style`, `extra`). No toolkit code changes were needed for the type itself — `_build_annotation_field_validators` reflects the updated dataclass automatically.
+
+### Tests
+
+- +34 new tests: 24 for `BindingLoader` (parsing, strict/loose modes, spec_version, file & directory loading, round-trip with `YAMLWriter`), 5 for the prompt confidence block, and 5 hardening tests (display deep-copy, malformed-shape warn, recursive glob, UTF-8 encoding, null-field error wording).
+- Updated `test_field_count` (13 → 14) and `test_all_expected_keys` for the new `display` field.
+- Total suite: 440 tests.
+
+### Hardening (post-review)
+
+- **`BindingLoader`**: warns (rather than silently drops) malformed `display` values that are not a mapping; `load()` gained a `recursive: bool = False` kwarg for nested binding layouts; `read_text` now forces UTF-8 decoding so non-ASCII aliases round-trip on non-UTF-8 locales; error wording changed from "missing required fields" to "missing or null required fields" to cover present-but-null keys.
+- **`YAMLWriter`**: `display` is now deep-copied into the emitted binding (defensive parity with the TypeScript/Rust writers) so post-write mutation of `ScannedModule.display` cannot leak into the file.
+- **`ScannedModule.display`**: moved to the END of the dataclass so existing positional `ScannedModule(...)` callers are not broken by the new field.
+
 ## [0.4.1] - 2026-03-25
 
 ### Added

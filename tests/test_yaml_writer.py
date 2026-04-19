@@ -84,6 +84,7 @@ class TestYAMLWriterFileOutput:
         """Verify binding dict still has all fields (via dry_run + _build_binding)."""
         writer = YAMLWriter()
         binding = writer._build_binding(annotated_module)
+        assert binding["spec_version"] == "1.0"
         b = binding["bindings"][0]
         assert b["module_id"] == "tasks.create_task"
         assert b["target"] == "myapp.views:create_task"
@@ -93,6 +94,24 @@ class TestYAMLWriterFileOutput:
         assert b["version"] == "2.0.0"
         assert b["annotations"]["destructive"] is True
         assert b["metadata"]["http_method"] == "POST"
+
+    def test_binding_omits_display_when_none(self, sample_module: ScannedModule) -> None:
+        """display is None by default and should be absent from YAML output."""
+        writer = YAMLWriter()
+        binding = writer._build_binding(sample_module)
+        assert "display" not in binding["bindings"][0]
+
+    def test_binding_emits_display_when_set(self, sample_module: ScannedModule) -> None:
+        """display overlay should round-trip through YAML when set."""
+        import dataclasses as _dc
+
+        mod = _dc.replace(sample_module, display={"mcp": {"alias": "users_get"}, "alias": "users.get"})
+        writer = YAMLWriter()
+        binding = writer._build_binding(mod)
+        assert binding["bindings"][0]["display"] == {
+            "mcp": {"alias": "users_get"},
+            "alias": "users.get",
+        }
 
 
 class TestYAMLWriterVerification:

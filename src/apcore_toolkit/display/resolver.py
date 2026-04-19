@@ -139,9 +139,8 @@ class DisplayResolver:
         display_cfg: dict[str, Any] = entry.get("display") or {}
         binding_desc: str | None = entry.get("description")
         binding_docs: str | None = entry.get("documentation")
-        suggested_alias: str | None = (
-            getattr(mod, "suggested_alias", None)
-            or (mod.metadata or {}).get("suggested_alias")
+        suggested_alias: str | None = getattr(mod, "suggested_alias", None) or (mod.metadata or {}).get(
+            "suggested_alias"
         )
 
         # ── Resolve cross-surface defaults ──────────────────────────────

@@ -22,6 +22,8 @@ pip install apcore-toolkit
 | `ScannedModule` | Canonical dataclass representing a scanned endpoint |
 | `BaseScanner` | Abstract base class for framework scanners with filtering and deduplication |
 | `YAMLWriter` | Generates `.binding.yaml` files for `apcore.BindingLoader` |
+| `BindingLoader` | Parses `.binding.yaml` files back into `ScannedModule` objects (pure-data inverse of `YAMLWriter`, with loose/strict modes) |
+| `BindingLoadError` | Exception raised when binding parsing fails; carries `file_path`, `module_id`, `missing_fields`, `reason` |
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
 | `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API |
@@ -223,7 +225,7 @@ Input and output schemas are inferred from PEP 484 type annotations. Use `includ
 ## Requirements
 
 - Python >= 3.11
-- apcore >= 0.14.0
+- apcore >= 0.19.0
 - pydantic >= 2.0
 - PyYAML >= 6.0
 

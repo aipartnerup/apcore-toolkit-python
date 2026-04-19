@@ -62,6 +62,7 @@ def module_to_dict(module: ScannedModule) -> dict[str, Any]:
         "metadata": module.metadata,
         "input_schema": module.input_schema,
         "output_schema": module.output_schema,
+        "display": module.display,
         "warnings": module.warnings,
     }
 

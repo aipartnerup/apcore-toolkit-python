@@ -139,6 +139,58 @@ class TestBuildPrompt:
         prompt = enhancer._build_prompt(sparse_module, ["input_schema"])
         assert '"input_schema"' in prompt
 
+    def test_prompt_confidence_lists_only_gapped_fields(
+        self, enhancer: AIEnhancer, sparse_module: ScannedModule
+    ) -> None:
+        prompt = enhancer._build_prompt(sparse_module, ["description"])
+        confidence_line = self._extract_confidence_line(prompt)
+        assert '"description": 0.0' in confidence_line
+        assert '"documentation"' not in confidence_line
+        assert "annotations." not in confidence_line
+        assert '"input_schema"' not in confidence_line
+
+    def test_prompt_confidence_includes_annotation_subfields(
+        self, enhancer: AIEnhancer, sparse_module: ScannedModule
+    ) -> None:
+        prompt = enhancer._build_prompt(sparse_module, ["annotations"])
+        confidence_line = self._extract_confidence_line(prompt)
+        assert '"annotations.readonly": 0.0' in confidence_line
+        assert '"annotations.destructive": 0.0' in confidence_line
+        assert '"annotations.streaming": 0.0' in confidence_line
+        assert '"annotations.cache_ttl": 0.0' in confidence_line
+        assert '"annotations.cache_key_fields": 0.0' in confidence_line
+        assert '"annotations.paginated": 0.0' in confidence_line
+        assert '"annotations.pagination_style": 0.0' in confidence_line
+        assert '"annotations.extra"' not in confidence_line
+
+    def test_prompt_confidence_includes_input_schema(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
+        prompt = enhancer._build_prompt(sparse_module, ["input_schema"])
+        confidence_line = self._extract_confidence_line(prompt)
+        assert '"input_schema": 0.0' in confidence_line
+
+    def test_prompt_confidence_combines_all_gaps(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
+        prompt = enhancer._build_prompt(sparse_module, ["description", "annotations"])
+        confidence_line = self._extract_confidence_line(prompt)
+        assert '"description": 0.0' in confidence_line
+        assert '"annotations.readonly": 0.0' in confidence_line
+
+    def test_prompt_annotations_confidence_matches_validators(
+        self, enhancer: AIEnhancer, sparse_module: ScannedModule
+    ) -> None:
+        from apcore_toolkit.ai_enhancer import _ANNOTATION_FIELD_VALIDATORS
+
+        prompt = enhancer._build_prompt(sparse_module, ["annotations"])
+        confidence_line = self._extract_confidence_line(prompt)
+        for field_name in _ANNOTATION_FIELD_VALIDATORS:
+            assert f'"annotations.{field_name}": 0.0' in confidence_line, f"expected confidence key for {field_name}"
+
+    @staticmethod
+    def _extract_confidence_line(prompt: str) -> str:
+        """Return the single-line string between '"confidence": {' and '}'."""
+        lines = prompt.splitlines()
+        start = next(i for i, ln in enumerate(lines) if '"confidence": {' in ln)
+        return lines[start + 1]
+
 
 class TestEnhanceModule:
     def test_applies_description_above_threshold(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:

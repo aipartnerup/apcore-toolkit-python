@@ -7,6 +7,7 @@ using Flask's richer _build_binding (annotations, documentation, metadata).
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import logging
 import re
@@ -121,23 +122,25 @@ class YAMLWriter:
 
         Includes annotations, documentation, examples, and metadata fields.
         """
-        return {
-            "bindings": [
-                {
-                    "module_id": module.module_id,
-                    "target": module.target,
-                    "description": module.description,
-                    "documentation": module.documentation,
-                    "tags": module.tags,
-                    "version": module.version,
-                    "annotations": annotations_to_dict(module.annotations),
-                    "examples": [dataclasses.asdict(e) for e in module.examples] if module.examples else [],
-                    "metadata": module.metadata,
-                    "input_schema": module.input_schema,
-                    "output_schema": module.output_schema,
-                }
-            ]
+        binding: dict[str, Any] = {
+            "module_id": module.module_id,
+            "target": module.target,
+            "description": module.description,
+            "documentation": module.documentation,
+            "tags": module.tags,
+            "version": module.version,
+            "annotations": annotations_to_dict(module.annotations),
+            "examples": [dataclasses.asdict(e) for e in module.examples] if module.examples else [],
+            "metadata": module.metadata,
+            "input_schema": module.input_schema,
+            "output_schema": module.output_schema,
         }
+        if module.display is not None:
+            # Deep-copy so later mutation of module.display does not leak
+            # through into the serialized YAML, and to match the defensive
+            # copying performed by the TypeScript/Rust writers.
+            binding["display"] = copy.deepcopy(module.display)
+        return {"spec_version": "1.0", "bindings": [binding]}
 
     @staticmethod
     def _verify(result: WriteResult, file_path: Path) -> WriteResult:

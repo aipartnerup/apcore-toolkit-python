@@ -66,6 +66,7 @@ class TestModuleToDict:
             "metadata",
             "input_schema",
             "output_schema",
+            "display",
             "warnings",
         }
         assert set(result.keys()) == expected_keys

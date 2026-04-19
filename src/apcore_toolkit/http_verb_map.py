@@ -107,8 +107,6 @@ def generate_suggested_alias(path: str, method: str) -> str:
     """
     raw_segments = [seg for seg in path.strip("/").split("/") if seg]
     segments = [seg for seg in raw_segments if not _PATH_PARAM_RE.fullmatch(seg)]
-    is_single_resource = bool(raw_segments) and bool(
-        _PATH_PARAM_RE.fullmatch(raw_segments[-1])
-    )
+    is_single_resource = bool(raw_segments) and bool(_PATH_PARAM_RE.fullmatch(raw_segments[-1]))
     verb = resolve_http_verb(method, is_single_resource)
     return ".".join([*segments, verb])

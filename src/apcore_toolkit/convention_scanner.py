@@ -20,8 +20,7 @@ logger = logging.getLogger("apcore_toolkit")
 # Type hint → JSON Schema mapping (subset of §5.11.5)
 # Derived from the shared PYTHON_TO_JSON_SCHEMA vocabulary.
 _TYPE_MAP: dict[type, dict[str, Any]] = {
-    getattr(builtins, name): {"type": json_type}
-    for name, json_type in PYTHON_TO_JSON_SCHEMA.items()
+    getattr(builtins, name): {"type": json_type} for name, json_type in PYTHON_TO_JSON_SCHEMA.items()
 }
 
 

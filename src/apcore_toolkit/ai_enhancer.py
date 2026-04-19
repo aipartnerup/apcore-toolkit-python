@@ -314,8 +314,23 @@ class AIEnhancer:
         if "input_schema" in gaps:
             parts.append('  "input_schema": <JSON Schema object for function parameters>,')
 
+        # Build confidence keys dynamically from gaps so the SLM is told to
+        # supply confidence for every field it is being asked to fill. The
+        # read side (_enhance_module) looks up annotations.<name> per-field
+        # keys via _ANNOTATION_FIELD_VALIDATORS; keep the prompt and the
+        # read logic symmetric by enumerating the same validator set.
+        confidence_keys: list[str] = []
+        if "description" in gaps:
+            confidence_keys.append("description")
+        if "documentation" in gaps:
+            confidence_keys.append("documentation")
+        if "input_schema" in gaps:
+            confidence_keys.append("input_schema")
+        if "annotations" in gaps:
+            confidence_keys.extend(f"annotations.{name}" for name in _ANNOTATION_FIELD_VALIDATORS)
+
         parts.append('  "confidence": {')
-        parts.append('    "description": 0.0, "documentation": 0.0')
+        parts.append("    " + ", ".join(f'"{k}": 0.0' for k in confidence_keys))
         parts.append("  }")
         parts.append("}")
         parts.append("")

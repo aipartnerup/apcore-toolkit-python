@@ -34,6 +34,10 @@ class ScannedModule:
             endpoint has HTTP route information. Defaults to ``None``.
         examples: Example invocations for documentation and testing.
         metadata: Arbitrary key-value data (e.g., http_method, url_rule).
+        display: Sparse display overlay (alias, description, cli/mcp/a2a
+            surface overrides) persisted to binding YAML. Distinct from
+            ``metadata["display"]``, which holds the *resolved* form
+            produced by ``DisplayResolver``. Defaults to ``None``.
         warnings: Non-fatal issues encountered during scanning.
     """
 
@@ -50,3 +54,6 @@ class ScannedModule:
     examples: list[ModuleExample] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    # New in 0.5.0. Appended to preserve positional compatibility with
+    # pre-0.5.0 constructions that supplied the first 13 fields positionally.
+    display: dict[str, Any] | None = None

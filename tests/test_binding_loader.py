@@ -1,0 +1,292 @@
+"""Tests for apcore_toolkit.binding_loader — BindingLoader."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+import pytest
+import yaml
+from apcore import ModuleAnnotations
+
+from apcore_toolkit import YAMLWriter
+from apcore_toolkit.binding_loader import BindingLoader, BindingLoadError
+from apcore_toolkit.types import ScannedModule
+
+
+@pytest.fixture
+def loader() -> BindingLoader:
+    return BindingLoader()
+
+
+@pytest.fixture
+def minimal_entry() -> dict:
+    return {"module_id": "x.y", "target": "pkg:func"}
+
+
+@pytest.fixture
+def full_entry() -> dict:
+    return {
+        "module_id": "users.get_user",
+        "target": "myapp.views:get_user",
+        "description": "Get a user",
+        "documentation": "Returns a user by ID.",
+        "tags": ["users", "get"],
+        "version": "2.0.0",
+        "annotations": {"readonly": True, "cacheable": True, "cache_ttl": 60},
+        "examples": [
+            {"title": "happy", "inputs": {"id": 1}, "output": {"name": "alice"}},
+        ],
+        "metadata": {"http_method": "GET"},
+        "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}}},
+        "output_schema": {"type": "object"},
+        "display": {"mcp": {"alias": "users_get"}, "alias": "users.get"},
+        "suggested_alias": "users.get.alt",
+        "warnings": ["stale"],
+    }
+
+
+class TestLoadData:
+    def test_loose_minimum_entry(self, loader: BindingLoader, minimal_entry: dict) -> None:
+        modules = loader.load_data({"bindings": [minimal_entry]})
+        assert len(modules) == 1
+        m = modules[0]
+        assert m.module_id == "x.y"
+        assert m.target == "pkg:func"
+        assert m.description == ""
+        assert m.input_schema == {}
+        assert m.output_schema == {}
+        assert m.tags == []
+        assert m.version == "1.0.0"
+        assert m.annotations is None
+        assert m.display is None
+
+    def test_strict_requires_input_schema(self, loader: BindingLoader, minimal_entry: dict) -> None:
+        with pytest.raises(BindingLoadError) as exc_info:
+            loader.load_data({"bindings": [minimal_entry]}, strict=True)
+        assert "input_schema" in exc_info.value.missing_fields
+        assert "output_schema" in exc_info.value.missing_fields
+        assert exc_info.value.module_id == "x.y"
+
+    def test_strict_accepts_when_schemas_present(self, loader: BindingLoader) -> None:
+        entry = {
+            "module_id": "x.y",
+            "target": "pkg:func",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        }
+        modules = loader.load_data({"bindings": [entry]}, strict=True)
+        assert len(modules) == 1
+
+    def test_missing_module_id_always_fails(self, loader: BindingLoader) -> None:
+        with pytest.raises(BindingLoadError) as exc:
+            loader.load_data({"bindings": [{"target": "pkg:func"}]})
+        assert "module_id" in exc.value.missing_fields
+
+    def test_missing_target_always_fails(self, loader: BindingLoader) -> None:
+        with pytest.raises(BindingLoadError) as exc:
+            loader.load_data({"bindings": [{"module_id": "x"}]})
+        assert "target" in exc.value.missing_fields
+
+    def test_missing_bindings_key(self, loader: BindingLoader) -> None:
+        with pytest.raises(BindingLoadError, match="bindings"):
+            loader.load_data({"spec_version": "1.0"})
+
+    def test_bindings_not_a_list(self, loader: BindingLoader) -> None:
+        with pytest.raises(BindingLoadError, match="not a list"):
+            loader.load_data({"bindings": "nope"})  # type: ignore[arg-type]
+
+    def test_entry_not_a_mapping(self, loader: BindingLoader) -> None:
+        with pytest.raises(BindingLoadError, match="mapping"):
+            loader.load_data({"bindings": ["scalar"]})  # type: ignore[list-item]
+
+    def test_top_level_not_mapping(self, loader: BindingLoader) -> None:
+        with pytest.raises(BindingLoadError, match="mapping"):
+            loader.load_data(["a", "b"])  # type: ignore[arg-type]
+
+    def test_annotations_parsed(self, loader: BindingLoader, full_entry: dict) -> None:
+        m = loader.load_data({"bindings": [full_entry]})[0]
+        assert isinstance(m.annotations, ModuleAnnotations)
+        assert m.annotations.readonly is True
+        assert m.annotations.cacheable is True
+        assert m.annotations.cache_ttl == 60
+
+    def test_annotations_wrong_type_logs_warning(self, loader: BindingLoader, caplog: pytest.LogCaptureFixture) -> None:
+        entry = {"module_id": "x", "target": "p:f", "annotations": "readonly"}
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            m = loader.load_data({"bindings": [entry]})[0]
+        assert m.annotations is None
+        assert any("annotations" in r.message for r in caplog.records)
+
+    def test_display_preserved(self, loader: BindingLoader, full_entry: dict) -> None:
+        m = loader.load_data({"bindings": [full_entry]})[0]
+        assert m.display == {"mcp": {"alias": "users_get"}, "alias": "users.get"}
+
+    def test_display_absent_defaults_none(self, loader: BindingLoader, minimal_entry: dict) -> None:
+        m = loader.load_data({"bindings": [minimal_entry]})[0]
+        assert m.display is None
+
+    def test_display_wrong_type_logs_warning(self, loader: BindingLoader, caplog: pytest.LogCaptureFixture) -> None:
+        """Malformed display (not a dict) is dropped — must warn, not silently ignore."""
+        entry = {"module_id": "x", "target": "p:f", "display": "not-a-dict"}
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            m = loader.load_data({"bindings": [entry]})[0]
+        assert m.display is None
+        assert any("display" in r.message and "x" in r.message for r in caplog.records)
+
+    def test_display_deep_copied_from_source(self, loader: BindingLoader) -> None:
+        """Mutating the returned display must not affect subsequent loads."""
+        source = {"mcp": {"alias": "original"}}
+        entry = {"module_id": "x", "target": "p:f", "display": source}
+        m = loader.load_data({"bindings": [entry]})[0]
+        assert m.display == {"mcp": {"alias": "original"}}
+        m.display["mcp"]["alias"] = "mutated"  # type: ignore[index]
+        assert source["mcp"]["alias"] == "original"
+
+    def test_examples_parsed(self, loader: BindingLoader, full_entry: dict) -> None:
+        m = loader.load_data({"bindings": [full_entry]})[0]
+        assert len(m.examples) == 1
+        assert m.examples[0].title == "happy"
+
+    def test_examples_malformed_skipped(self, loader: BindingLoader, caplog: pytest.LogCaptureFixture) -> None:
+        entry = {
+            "module_id": "x",
+            "target": "p:f",
+            "examples": [{"title": "ok", "inputs": {}, "output": {}}, "bad", {"unknown_field": 1}],
+        }
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            m = loader.load_data({"bindings": [entry]})[0]
+        assert len(m.examples) == 1
+        assert m.examples[0].title == "ok"
+
+
+class TestSpecVersion:
+    def test_missing_spec_version_warns(self, loader: BindingLoader, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            loader.load_data({"bindings": [{"module_id": "x", "target": "p:f"}]})
+        assert any("spec_version" in r.message for r in caplog.records)
+
+    def test_unsupported_spec_version_warns(self, loader: BindingLoader, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            loader.load_data({"spec_version": "2.0", "bindings": [{"module_id": "x", "target": "p:f"}]})
+        assert any("newer than supported" in r.message for r in caplog.records)
+
+    def test_supported_spec_version_silent(self, loader: BindingLoader, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            loader.load_data({"spec_version": "1.0", "bindings": [{"module_id": "x", "target": "p:f"}]})
+        assert not any("spec_version" in r.message for r in caplog.records)
+
+
+class TestLoadFromFile:
+    def test_single_file(self, loader: BindingLoader, tmp_path: Path, full_entry: dict) -> None:
+        f = tmp_path / "one.binding.yaml"
+        f.write_text(yaml.dump({"spec_version": "1.0", "bindings": [full_entry]}))
+        modules = loader.load(f)
+        assert len(modules) == 1
+        assert modules[0].module_id == "users.get_user"
+
+    def test_directory_loads_all_binding_files(self, loader: BindingLoader, tmp_path: Path) -> None:
+        for i, name in enumerate(["a", "b", "c"]):
+            (tmp_path / f"{name}.binding.yaml").write_text(
+                yaml.dump(
+                    {
+                        "spec_version": "1.0",
+                        "bindings": [{"module_id": name, "target": f"pkg:f{i}"}],
+                    }
+                )
+            )
+        (tmp_path / "unrelated.yaml").write_text("irrelevant: true")
+        modules = loader.load(tmp_path)
+        assert [m.module_id for m in modules] == ["a", "b", "c"]
+
+    def test_nonexistent_path(self, loader: BindingLoader, tmp_path: Path) -> None:
+        with pytest.raises(BindingLoadError, match="does not exist"):
+            loader.load(tmp_path / "nope")
+
+    def test_malformed_yaml(self, loader: BindingLoader, tmp_path: Path) -> None:
+        f = tmp_path / "bad.binding.yaml"
+        f.write_text("::: not yaml :::")
+        with pytest.raises(BindingLoadError, match="parse YAML"):
+            loader.load(f)
+
+    def test_empty_file_skipped(self, loader: BindingLoader, tmp_path: Path) -> None:
+        f = tmp_path / "empty.binding.yaml"
+        f.write_text("")
+        modules = loader.load(f)
+        assert modules == []
+
+    def test_recursive_glob_opt_in(self, loader: BindingLoader, tmp_path: Path) -> None:
+        """Default load is flat; recursive=True descends into subdirs."""
+        (tmp_path / "top.binding.yaml").write_text(
+            yaml.dump({"spec_version": "1.0", "bindings": [{"module_id": "top", "target": "p:f"}]})
+        )
+        nested = tmp_path / "sub" / "deep"
+        nested.mkdir(parents=True)
+        (nested / "deep.binding.yaml").write_text(
+            yaml.dump({"spec_version": "1.0", "bindings": [{"module_id": "deep", "target": "p:g"}]})
+        )
+
+        flat = loader.load(tmp_path)
+        assert [m.module_id for m in flat] == ["top"]
+
+        deep = loader.load(tmp_path, recursive=True)
+        assert sorted(m.module_id for m in deep) == ["deep", "top"]
+
+    def test_utf8_encoding_on_read(self, loader: BindingLoader, tmp_path: Path) -> None:
+        """Non-ASCII aliases round-trip correctly regardless of platform locale."""
+        f = tmp_path / "unicode.binding.yaml"
+        f.write_bytes(
+            yaml.dump(
+                {
+                    "spec_version": "1.0",
+                    "bindings": [{"module_id": "g\u00f6tt", "target": "p:f"}],
+                },
+                allow_unicode=True,
+            ).encode("utf-8")
+        )
+        m = loader.load(f)[0]
+        assert m.module_id == "g\u00f6tt"
+
+    def test_null_value_in_required_field_error_wording(self, loader: BindingLoader) -> None:
+        """A present-but-null required field produces 'missing or null' wording."""
+        entry = {"module_id": "x", "target": None}
+        with pytest.raises(BindingLoadError) as exc:
+            loader.load_data({"bindings": [entry]})
+        assert "missing or null" in exc.value.reason
+        assert "target" in exc.value.missing_fields
+
+
+class TestRoundTrip:
+    def test_writer_loader_round_trip(self, tmp_path: Path) -> None:
+        original = ScannedModule(
+            module_id="round.trip",
+            description="Round-trip test",
+            input_schema={"type": "object", "properties": {"q": {"type": "string"}}},
+            output_schema={"type": "object"},
+            tags=["demo"],
+            target="demo.app:handler",
+            version="1.2.3",
+            annotations=ModuleAnnotations(readonly=True, streaming=True, cache_ttl=30),
+            documentation="Docs here",
+            metadata={"http_method": "GET"},
+            display={"mcp": {"alias": "rt"}, "alias": "round-trip"},
+        )
+        YAMLWriter().write([original], str(tmp_path))
+        loaded = BindingLoader().load(tmp_path)
+
+        assert len(loaded) == 1
+        m = loaded[0]
+        assert m.module_id == original.module_id
+        assert m.target == original.target
+        assert m.description == original.description
+        assert m.documentation == original.documentation
+        assert m.tags == original.tags
+        assert m.version == original.version
+        assert m.input_schema == original.input_schema
+        assert m.output_schema == original.output_schema
+        assert m.metadata == original.metadata
+        assert m.display == original.display
+        assert m.annotations is not None
+        assert m.annotations.readonly is True
+        assert m.annotations.streaming is True
+        assert m.annotations.cache_ttl == 30

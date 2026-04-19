@@ -27,8 +27,8 @@ class TestScannedModuleDefaults:
         assert annotated_module.metadata["http_method"] == "POST"
 
     def test_field_count(self) -> None:
-        """ScannedModule has exactly 13 fields."""
-        assert len(fields(ScannedModule)) == 13
+        """ScannedModule has exactly 14 fields."""
+        assert len(fields(ScannedModule)) == 14
 
     def test_mutable_defaults_are_independent(self) -> None:
         a = ScannedModule(
