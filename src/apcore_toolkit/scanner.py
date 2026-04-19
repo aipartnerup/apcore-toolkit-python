@@ -51,8 +51,8 @@ class BaseScanner(ABC):
         """
         return parse_docstring(func)
 
+    @staticmethod
     def filter_modules(
-        self,
         modules: list[ScannedModule],
         include: str | None = None,
         exclude: str | None = None,

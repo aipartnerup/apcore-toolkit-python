@@ -123,6 +123,17 @@ class TestConventionScannerBasic:
 class TestConventionScannerFilterDelegation:
     """Verify that ConventionScanner delegates include/exclude to BaseScanner.filter_modules."""
 
+    @staticmethod
+    def _extract_include_exclude(mock_filter):
+        """Return (include, exclude) from the mocked call's positional args.
+
+        filter_modules is a @staticmethod with signature (modules, include, exclude).
+        """
+        args, _ = mock_filter.call_args
+        assert len(args) == 3, f"expected 3 positional args, got {len(args)}: {args!r}"
+        _, include, exclude = args
+        return include, exclude
+
     def test_include_delegates_to_base_scanner_filter_modules(self, scanner, tmp_path):
         """ConventionScanner.scan() must call BaseScanner.filter_modules for include filtering."""
         (tmp_path / "a.py").write_text('def func1(x: str) -> str:\n    """A."""\n    return x\n')
@@ -132,6 +143,9 @@ class TestConventionScannerFilterDelegation:
             modules = scanner.scan(tmp_path, include=r"^a\.")
 
         mock_filter.assert_called_once()
+        include, exclude = self._extract_include_exclude(mock_filter)
+        assert include == r"^a\."
+        assert exclude is None
         assert len(modules) == 1
         assert modules[0].module_id == "a.func1"
 
@@ -144,6 +158,9 @@ class TestConventionScannerFilterDelegation:
             modules = scanner.scan(tmp_path, exclude=r"^b\.")
 
         mock_filter.assert_called_once()
+        include, exclude = self._extract_include_exclude(mock_filter)
+        assert include is None
+        assert exclude == r"^b\."
         assert len(modules) == 1
         assert modules[0].module_id == "a.func1"
 
@@ -155,4 +172,22 @@ class TestConventionScannerFilterDelegation:
             modules = scanner.scan(tmp_path)
 
         mock_filter.assert_called_once()
+        include, exclude = self._extract_include_exclude(mock_filter)
+        assert include is None
+        assert exclude is None
         assert len(modules) == 1
+
+    def test_delegates_with_both_include_and_exclude(self, scanner, tmp_path):
+        """Regression: include and exclude must reach filter_modules in the correct slots."""
+        (tmp_path / "a.py").write_text('def func1(x: str) -> str:\n    """A."""\n    return x\n')
+        (tmp_path / "b.py").write_text('def func2(x: str) -> str:\n    """B."""\n    return x\n')
+
+        with patch.object(BaseScanner, "filter_modules", wraps=BaseScanner.filter_modules) as mock_filter:
+            modules = scanner.scan(tmp_path, include=r"\.", exclude=r"^b\.")
+
+        mock_filter.assert_called_once()
+        include, exclude = self._extract_include_exclude(mock_filter)
+        assert include == r"\."
+        assert exclude == r"^b\."
+        assert len(modules) == 1
+        assert modules[0].module_id == "a.func1"

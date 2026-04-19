@@ -69,8 +69,9 @@ class ConventionScanner:
                 logger.warning("ConventionScanner: failed to scan %s: %s", py_file, exc)
 
         # Apply include/exclude filters — delegate to BaseScanner.filter_modules
-        # to avoid parallel implementations that can diverge on edge cases.
-        modules = BaseScanner.filter_modules(self, modules, include, exclude)
+        # (a @staticmethod) to avoid parallel implementations that can diverge
+        # on edge cases.
+        modules = BaseScanner.filter_modules(modules, include, exclude)
 
         logger.info("ConventionScanner: discovered %d modules from %s", len(modules), commands_path)
         return modules
