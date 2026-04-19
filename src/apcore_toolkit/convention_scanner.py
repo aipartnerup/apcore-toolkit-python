@@ -30,6 +30,12 @@ class ConventionScanner:
     Converts each discovered function into a ScannedModule with
     schema inferred from type annotations and description from docstrings.
 
+    .. warning::
+        :meth:`scan` executes every ``.py`` file it discovers via
+        ``importlib``'s ``exec_module``. Point it only at **trusted,
+        reviewed source directories** — scanning an untrusted directory
+        is equivalent to running arbitrary Python code.
+
     Usage::
 
         scanner = ConventionScanner()
