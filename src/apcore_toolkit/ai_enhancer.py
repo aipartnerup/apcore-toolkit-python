@@ -158,10 +158,13 @@ class AIEnhancer:
         For each module, identifies missing fields and calls the SLM to
         generate them. Only fields above the confidence threshold are applied.
 
-        Modules with gaps are collected into batches of ``batch_size``
-        (configured via ``APCORE_AI_BATCH_SIZE``, default 5). Each batch
-        shares a single prompt/API call where possible, reducing round-trips.
-        When batch_size is 1, behaviour is identical to per-module processing.
+        ``batch_size`` (configured via ``APCORE_AI_BATCH_SIZE``, default 5)
+        currently controls only the outer iteration granularity — each
+        module still produces its own prompt and API call. The setting
+        is retained so a future implementation can coalesce prompts
+        without changing the caller-facing configuration. When
+        ``batch_size`` is 1, behaviour is identical to per-module
+        processing. **It does not currently reduce API round-trips.**
 
         Args:
             modules: List of ScannedModule instances (post-scan).
