@@ -35,9 +35,11 @@ from apcore_toolkit.pydantic_utils import flatten_pydantic_params, resolve_targe
 from apcore_toolkit.convention_scanner import ConventionScanner
 from apcore_toolkit.http_verb_map import (
     SCANNER_VERB_MAP,
+    extract_path_param_names,
     generate_suggested_alias,
     has_path_params,
     resolve_http_verb,
+    substitute_path_params,
 )
 from apcore_toolkit.scanner import BaseScanner
 from apcore_toolkit.schema_utils import enrich_schema_descriptions
@@ -77,6 +79,7 @@ __all__ = [
     "enrich_schema_descriptions",
     "extract_input_schema",
     "extract_output_schema",
+    "extract_path_param_names",
     "flatten_pydantic_params",
     "generate_suggested_alias",
     "get_writer",
@@ -88,5 +91,6 @@ __all__ = [
     "resolve_schema",
     "resolve_target",
     "run_verifier_chain",
+    "substitute_path_params",
     "to_markdown",
 ]

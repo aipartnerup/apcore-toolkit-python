@@ -67,12 +67,19 @@ All new symbols are re-exported from `apcore_toolkit.__init__`:
 | `has_path_params` | `function` | `apcore_toolkit.http_verb_map` |
 | `generate_suggested_alias` | `function` | `apcore_toolkit.http_verb_map` |
 
+New symbols also re-exported (added during v0.5.0 proxy-writer work):
+
+| Symbol | Type | Import Path |
+|---|---|---|
+| `extract_path_param_names` | `function` | `apcore_toolkit.http_verb_map` |
+| `substitute_path_params` | `function` | `apcore_toolkit.http_verb_map` |
+
 Existing symbols with additions:
 
 | Symbol | Change |
 |---|---|
 | `BaseScanner` | New `@staticmethod generate_suggested_alias(path, method)` |
-| `ScannedModule` | New field `suggested_alias: str \| None = None` |
+| `ScannedModule` | New field `suggested_alias: str \| None = None`; new field `display: dict[str, Any] \| None = None` |
 | `DisplayResolver` | Reads `suggested_alias` from field first, then metadata fallback |
 
 ## Versioning
