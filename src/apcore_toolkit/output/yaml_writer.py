@@ -135,6 +135,10 @@ class YAMLWriter:
             "input_schema": module.input_schema,
             "output_schema": module.output_schema,
         }
+        if module.suggested_alias is not None:
+            # Emit only when set so omitting the field in YAML round-trips back
+            # to None (see BindingLoader._parse_entry: entry.get("suggested_alias")).
+            binding["suggested_alias"] = module.suggested_alias
         if module.display is not None:
             # Deep-copy so later mutation of module.display does not leak
             # through into the serialized YAML, and to match the defensive

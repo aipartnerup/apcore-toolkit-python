@@ -62,6 +62,7 @@ class TestModuleToDict:
             "version",
             "target",
             "annotations",
+            "suggested_alias",
             "examples",
             "metadata",
             "input_schema",
@@ -70,6 +71,23 @@ class TestModuleToDict:
             "warnings",
         }
         assert set(result.keys()) == expected_keys
+
+    def test_suggested_alias_emitted_when_set(self) -> None:
+        m = ScannedModule(
+            module_id="users.get_user",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f",
+            suggested_alias="users.get",
+        )
+        result = module_to_dict(m)
+        assert result["suggested_alias"] == "users.get"
+
+    def test_suggested_alias_none_by_default(self, sample_module: ScannedModule) -> None:
+        result = module_to_dict(sample_module)
+        assert result["suggested_alias"] is None
 
     def test_warnings_included(self) -> None:
         m = ScannedModule(

@@ -290,3 +290,34 @@ class TestRoundTrip:
         assert m.annotations.readonly is True
         assert m.annotations.streaming is True
         assert m.annotations.cache_ttl == 30
+
+    def test_suggested_alias_round_trip(self, tmp_path: Path) -> None:
+        """Scanner-set suggested_alias must survive YAMLWriter → BindingLoader."""
+        original = ScannedModule(
+            module_id="tasks.user_data.post",
+            description="Create task data",
+            input_schema={"type": "object", "properties": {}},
+            output_schema={"type": "object"},
+            tags=[],
+            target="demo.app:handler",
+            suggested_alias="tasks.user_data.create",
+        )
+        YAMLWriter().write([original], str(tmp_path))
+        loaded = BindingLoader().load(tmp_path)
+
+        assert len(loaded) == 1
+        assert loaded[0].suggested_alias == "tasks.user_data.create"
+
+    def test_suggested_alias_none_round_trip(self, tmp_path: Path) -> None:
+        """A module without suggested_alias must load back with None (not missing key crash)."""
+        original = ScannedModule(
+            module_id="tasks.noalias",
+            description="",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="demo.app:handler",
+        )
+        YAMLWriter().write([original], str(tmp_path))
+        loaded = BindingLoader().load(tmp_path)
+        assert loaded[0].suggested_alias is None

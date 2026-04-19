@@ -58,6 +58,7 @@ def module_to_dict(module: ScannedModule) -> dict[str, Any]:
         "version": module.version,
         "target": module.target,
         "annotations": annotations_to_dict(module.annotations),
+        "suggested_alias": module.suggested_alias,
         "examples": [dataclasses.asdict(e) for e in module.examples] if module.examples else [],
         "metadata": module.metadata,
         "input_schema": module.input_schema,
