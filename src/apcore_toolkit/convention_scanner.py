@@ -19,7 +19,7 @@ logger = logging.getLogger("apcore_toolkit")
 
 # Type hint → JSON Schema mapping (subset of §5.11.5)
 # Derived from the shared PYTHON_TO_JSON_SCHEMA vocabulary.
-_TYPE_MAP: dict[type, dict[str, Any]] = {
+_BUILTIN_TYPE_TO_SCHEMA: dict[type, dict[str, Any]] = {
     getattr(builtins, name): {"type": json_type} for name, json_type in PYTHON_TO_JSON_SCHEMA.items()
 }
 
@@ -206,8 +206,8 @@ class ConventionScanner:
             return {"type": "string"}
 
         # Direct type mapping
-        if type_hint in _TYPE_MAP:
-            return dict(_TYPE_MAP[type_hint])
+        if type_hint in _BUILTIN_TYPE_TO_SCHEMA:
+            return dict(_BUILTIN_TYPE_TO_SCHEMA[type_hint])
 
         # Handle Optional[X] / X | None
         origin = getattr(type_hint, "__origin__", None)
