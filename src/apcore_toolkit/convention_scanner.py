@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import inspect
 import logging
-import re
 import sys
 from pathlib import Path
 from typing import Any, get_type_hints
@@ -13,6 +12,7 @@ from typing import Any, get_type_hints
 import builtins
 
 from apcore_toolkit._type_mapping import PYTHON_TO_JSON_SCHEMA
+from apcore_toolkit.scanner import BaseScanner
 from apcore_toolkit.types import ScannedModule
 
 logger = logging.getLogger("apcore_toolkit")
@@ -68,13 +68,9 @@ class ConventionScanner:
             except Exception as exc:
                 logger.warning("ConventionScanner: failed to scan %s: %s", py_file, exc)
 
-        # Apply include/exclude filters
-        if include:
-            pattern = re.compile(include)
-            modules = [m for m in modules if pattern.search(m.module_id)]
-        if exclude:
-            pattern = re.compile(exclude)
-            modules = [m for m in modules if not pattern.search(m.module_id)]
+        # Apply include/exclude filters — delegate to BaseScanner.filter_modules
+        # to avoid parallel implementations that can diverge on edge cases.
+        modules = BaseScanner.filter_modules(self, modules, include, exclude)
 
         logger.info("ConventionScanner: discovered %d modules from %s", len(modules), commands_path)
         return modules
