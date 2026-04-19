@@ -200,25 +200,24 @@ def generate_suggested_alias(path: str, method: str) -> str:
         Dot-separated alias string. If the path has no non-parameter
         segments, returns just the semantic verb (e.g., "list").
     """
-    segments = [
-        seg
-        for seg in path.strip("/").split("/")
-        if seg and not _PATH_PARAM_RE.fullmatch(seg)
-    ]
-    path_has_params = has_path_params(path)
-    verb = resolve_http_verb(method, path_has_params)
+    raw_segments = [seg for seg in path.strip("/").split("/") if seg]
+    segments = [seg for seg in raw_segments if not _PATH_PARAM_RE.fullmatch(seg)]
+    is_single_resource = bool(raw_segments) and bool(_PATH_PARAM_RE.fullmatch(raw_segments[-1]))
+    verb = resolve_http_verb(method, is_single_resource)
     return ".".join([*segments, verb])
 ```
 
 **Logic steps**:
-1. Strip leading and trailing `/` from `path`.
-2. Split the stripped path on `/`.
-3. Filter the split segments:
-   - Drop empty strings (covers the `"/"` and `"//"` cases).
-   - Drop segments that entirely match the path parameter regex (full-match, not substring).
-4. Determine whether the original path has parameters via `has_path_params(path)`.
-5. Resolve the semantic verb via `resolve_http_verb(method, path_has_params)`.
-6. Join the filtered segments plus the verb with `"."`.
+1. Strip leading and trailing `/` from `path`, split on `/`, drop empty strings
+   (handles `"/"`, `"//"` and trailing-slash cases).
+2. Filter the split segments — keep only segments that do **not** entirely match the
+   path parameter regex (full-match, not substring). These are the *non-param* segments.
+3. Determine `is_single_resource`: the last segment of the *raw* (unfiltered) list is a
+   path parameter placeholder. This correctly classifies nested collection endpoints like
+   `GET /orgs/{org_id}/members` as "list" (last segment `members` is not a param),
+   while `GET /users/{id}` is "get" (last segment `{id}` is a param).
+4. Resolve the semantic verb via `resolve_http_verb(method, is_single_resource)`.
+5. Join the non-param segments plus the verb with `"."`.
 
 **Parameter validation**:
 - `path`: No validation. Any string accepted.

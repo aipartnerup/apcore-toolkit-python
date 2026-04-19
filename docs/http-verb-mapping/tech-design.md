@@ -265,15 +265,16 @@ def generate_suggested_alias(path: str, method: str) -> str:
   - `method`: HTTP method (e.g., `"POST"`).
 - **Returns**: Dot-separated alias string (e.g., `"tasks.user_data.create"`).
 - **Logic**:
-  1. Strip leading/trailing `/` from `path`, split on `/`.
-  2. Filter out segments that are path parameters (full-match against the path param regex).
-  3. Detect whether path has parameters via `has_path_params(path)`.
-  4. Resolve semantic verb via `resolve_http_verb(method, path_has_params)`.
+  1. Strip leading/trailing `/` from `path`, split on `/`, drop empty strings.
+  2. Filter out segments that are path parameters (full-match against the path param regex) to obtain the *non-param* segments.
+  3. Determine `is_single_resource`: check whether the **last** segment of the raw (unfiltered) list is a path parameter. This correctly classifies nested collection endpoints — e.g. `GET /orgs/{org_id}/members` yields `"orgs.members.list"` because the last segment `members` is not a param, even though the path contains `{org_id}`.
+  4. Resolve semantic verb via `resolve_http_verb(method, is_single_resource)`.
   5. Join non-param segments + verb with `"."`.
 - **Edge cases**:
   - Root path `"/"`: segments list is empty, result is just the verb (e.g., `"list"`).
   - Trailing slash `"/tasks/"`: stripped, same as `"/tasks"`.
   - Path with only params `"/{org_id}/{team_id}"`: returns just the verb.
+  - Nested collection `GET /orgs/{org_id}/members`: last segment `members` is not a param → `"orgs.members.list"`.
 
 ### 4.2 BaseScanner.generate_suggested_alias()
 
