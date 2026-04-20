@@ -54,6 +54,8 @@ class ScannedModule:
     examples: list[ModuleExample] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    # New in 0.5.0. Appended late in the release cycle; suggested_alias changed
-    # positional ordering in the same release, so keyword-only construction is expected.
+    # Added in v0.5.0. Inserting suggested_alias at position 10 (after documentation)
+    # shifted examples→11, metadata→12, warnings→13, display→14. Any positional
+    # caller passing examples/metadata/warnings will break on upgrade from 0.4.x —
+    # use keyword-only construction (the norm in all framework scanners).
     display: dict[str, Any] | None = None
