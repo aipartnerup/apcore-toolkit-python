@@ -6,6 +6,8 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
+import pytest
 from apcore import Registry
 
 from apcore_toolkit.output.http_proxy_writer import HTTPProxyRegistryWriter
@@ -49,7 +51,7 @@ class TestHTTPProxyRegistryWriter:
         registry = Registry()
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
 
-        # Module with nullable field via anyOf
+        # Module with nullable field via anyOf — valid schema, should register successfully
         mod = _make_module(
             input_schema={
                 "type": "object",
@@ -61,10 +63,19 @@ class TestHTTPProxyRegistryWriter:
         )
 
         results = writer.write([mod], registry)
-        # Should succeed or gracefully fail (no crash)
         assert len(results) == 1
+        assert results[0].verified is True
 
-    def test_proxy_sends_get_with_query_params(self) -> None:
+    def test_write_with_none_metadata_falls_back_to_defaults(self) -> None:
+        """_get_http_fields must not AttributeError when mod.metadata is None."""
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+        mod = _make_module()
+        mod.metadata = None  # simulate framework module without metadata dict
+        results = writer.write([mod], registry)
+        assert results[0].verified is True
+
+    def test_proxy_sends_get_with_query_params(self, monkeypatch) -> None:
         registry = Registry()
         writer = HTTPProxyRegistryWriter(
             base_url="http://localhost:8000",
@@ -79,10 +90,8 @@ class TestHTTPProxyRegistryWriter:
         )
         writer.write([mod], registry)
 
-        # Get the registered module instance
         module_instance = registry._modules["test.get_items.get"]
 
-        # Mock httpx
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"items": [], "total": 0}
@@ -92,25 +101,18 @@ class TestHTTPProxyRegistryWriter:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        import httpx
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
 
-        original = httpx.AsyncClient
-        httpx.AsyncClient = MagicMock(return_value=mock_client)
+        result = asyncio.run(module_instance.execute({"page": 1, "size": 10}))
+        assert result == {"items": [], "total": 0}
 
-        try:
-            result = asyncio.run(module_instance.execute({"page": 1, "size": 10}))
-            assert result == {"items": [], "total": 0}
+        mock_client.request.assert_called_once()
+        call_args = mock_client.request.call_args
+        assert call_args[0] == ("GET", "/items")
+        assert call_args[1]["params"] == {"page": 1, "size": 10}
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
 
-            # Verify the request was made with query params
-            mock_client.request.assert_called_once()
-            call_args = mock_client.request.call_args
-            assert call_args[0] == ("GET", "/items")
-            assert call_args[1]["params"] == {"page": 1, "size": 10}
-            assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
-        finally:
-            httpx.AsyncClient = original
-
-    def test_proxy_sends_post_with_json_body(self) -> None:
+    def test_proxy_sends_post_with_json_body(self, monkeypatch) -> None:
         registry = Registry()
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
 
@@ -137,22 +139,16 @@ class TestHTTPProxyRegistryWriter:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        import httpx
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
 
-        original = httpx.AsyncClient
-        httpx.AsyncClient = MagicMock(return_value=mock_client)
+        result = asyncio.run(module_instance.execute({"name": "Test"}))
+        assert result["name"] == "Test"
 
-        try:
-            result = asyncio.run(module_instance.execute({"name": "Test"}))
-            assert result["name"] == "Test"
+        call_args = mock_client.request.call_args
+        assert call_args[0] == ("POST", "/items")
+        assert call_args[1]["json"] == {"name": "Test"}
 
-            call_args = mock_client.request.call_args
-            assert call_args[0] == ("POST", "/items")
-            assert call_args[1]["json"] == {"name": "Test"}
-        finally:
-            httpx.AsyncClient = original
-
-    def test_proxy_substitutes_path_params(self) -> None:
+    def test_proxy_substitutes_path_params(self, monkeypatch) -> None:
         registry = Registry()
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
 
@@ -179,23 +175,16 @@ class TestHTTPProxyRegistryWriter:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        import httpx
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
 
-        original = httpx.AsyncClient
-        httpx.AsyncClient = MagicMock(return_value=mock_client)
+        result = asyncio.run(module_instance.execute({"item_id": "abc"}))
+        assert result["id"] == "abc"
 
-        try:
-            result = asyncio.run(module_instance.execute({"item_id": "abc"}))
-            assert result["id"] == "abc"
+        call_args = mock_client.request.call_args
+        assert call_args[0] == ("GET", "/items/abc")
+        assert "params" not in call_args[1] or call_args[1]["params"] == {}
 
-            call_args = mock_client.request.call_args
-            # Path param should be substituted, not sent as query
-            assert call_args[0] == ("GET", "/items/abc")
-            assert "params" not in call_args[1] or call_args[1]["params"] == {}
-        finally:
-            httpx.AsyncClient = original
-
-    def test_proxy_substitutes_colon_style_path_params(self) -> None:
+    def test_proxy_substitutes_colon_style_path_params(self, monkeypatch) -> None:
         """Regression: colon-style paths (:id) must substitute, not leak into query."""
         registry = Registry()
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
@@ -223,19 +212,14 @@ class TestHTTPProxyRegistryWriter:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        import httpx
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
 
-        original = httpx.AsyncClient
-        httpx.AsyncClient = MagicMock(return_value=mock_client)
-        try:
-            asyncio.run(module_instance.execute({"item_id": "abc"}))
-            call_args = mock_client.request.call_args
-            assert call_args[0] == ("GET", "/items/abc")
-            assert "params" not in call_args[1] or call_args[1]["params"] == {}
-        finally:
-            httpx.AsyncClient = original
+        asyncio.run(module_instance.execute({"item_id": "abc"}))
+        call_args = mock_client.request.call_args
+        assert call_args[0] == ("GET", "/items/abc")
+        assert "params" not in call_args[1] or call_args[1]["params"] == {}
 
-    def test_delete_forwards_non_path_inputs_as_query(self) -> None:
+    def test_delete_forwards_non_path_inputs_as_query(self, monkeypatch) -> None:
         """Regression: DELETE with non-path inputs must not silently drop them."""
         registry = Registry()
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
@@ -260,20 +244,13 @@ class TestHTTPProxyRegistryWriter:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
-        import httpx
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
 
-        original = httpx.AsyncClient
-        httpx.AsyncClient = MagicMock(return_value=mock_client)
-        try:
-            asyncio.run(module_instance.execute({"ids": "1,2,3"}))
-            call_args = mock_client.request.call_args
-            assert call_args[0] == ("DELETE", "/items")
-            # Non-path input must be forwarded somewhere — query is the
-            # conventional slot for non-body methods.
-            assert call_args[1].get("params") == {"ids": "1,2,3"}
-            assert "json" not in call_args[1]
-        finally:
-            httpx.AsyncClient = original
+        asyncio.run(module_instance.execute({"ids": "1,2,3"}))
+        call_args = mock_client.request.call_args
+        assert call_args[0] == ("DELETE", "/items")
+        assert call_args[1].get("params") == {"ids": "1,2,3"}
+        assert "json" not in call_args[1]
 
     def test_write_failure_preserves_traceback(self, caplog, monkeypatch) -> None:
         """When module construction fails, the warning log must carry exc_info
@@ -296,11 +273,14 @@ class TestHTTPProxyRegistryWriter:
         assert not results[0].verified
         assert "RuntimeError" in (results[0].verification_error or "")
         assert "synthetic build failure" in (results[0].verification_error or "")
-        failures = [r for r in caplog.records if "failed to register" in r.getMessage()]
-        assert failures, "expected at least one WARNING record for the failed module"
-        assert all(
-            r.exc_info is not None for r in failures
-        ), "WARNING records for registration failures must carry exc_info"
+        failures = [
+            r
+            for r in caplog.records
+            if r.exc_info is not None
+            and r.exc_info[0] is RuntimeError
+            and "synthetic build failure" in str(r.exc_info[1])
+        ]
+        assert failures, "expected at least one WARNING record with RuntimeError exc_info"
 
     def test_no_auth_headers_when_factory_is_none(self) -> None:
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
@@ -360,3 +340,82 @@ class TestExtractErrorMessage:
         resp = self._make_resp(json_side_effect=RuntimeError("unexpected crash"))
         with pytest.raises(RuntimeError, match="unexpected crash"):
             _extract_error_message(resp)
+
+
+class TestProxyModuleExecute:
+    """Regression tests for ProxyModule.execute() error paths (issues 2, 3, 10)."""
+
+    def _setup(self, monkeypatch, mock_client: AsyncMock, **module_kwargs: Any) -> Any:
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+        mod = _make_module(**module_kwargs)
+        writer.write([mod], registry)
+        module_instance = registry._modules[mod.module_id]
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
+        return module_instance
+
+    def _mock_client(self, response: Any) -> AsyncMock:
+        mock = AsyncMock()
+        mock.request = AsyncMock(return_value=response)
+        mock.__aenter__ = AsyncMock(return_value=mock)
+        mock.__aexit__ = AsyncMock(return_value=None)
+        return mock
+
+    def test_execute_malformed_json_on_2xx_raises_module_error(self, monkeypatch) -> None:
+        """200 response with invalid JSON body must raise ModuleError, not ValueError."""
+        from apcore.errors import ModuleError
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("invalid json")
+        module_instance = self._setup(monkeypatch, self._mock_client(mock_response))
+
+        with pytest.raises(ModuleError):
+            asyncio.run(module_instance.execute({}))
+
+    def test_execute_non_dict_json_on_2xx_raises_module_error(self, monkeypatch) -> None:
+        """200 response where json() returns a list must raise ModuleError."""
+        from apcore.errors import ModuleError
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [1, 2, 3]
+        module_instance = self._setup(monkeypatch, self._mock_client(mock_response))
+
+        with pytest.raises(ModuleError):
+            asyncio.run(module_instance.execute({}))
+
+    def test_execute_httpx_transport_error_raises_module_error(self, monkeypatch) -> None:
+        """httpx.HTTPError during transport must be wrapped in ModuleError, not propagate raw."""
+        from apcore.errors import ModuleError
+
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(side_effect=httpx.HTTPError("connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        module_instance = self._setup(monkeypatch, mock_client)
+
+        with pytest.raises(ModuleError):
+            asyncio.run(module_instance.execute({}))
+
+    def test_execute_204_returns_empty_dict(self, monkeypatch) -> None:
+        """204 No Content must return {} without attempting to parse body."""
+        mock_response = MagicMock()
+        mock_response.status_code = 204
+        module_instance = self._setup(monkeypatch, self._mock_client(mock_response))
+
+        result = asyncio.run(module_instance.execute({}))
+        assert result == {}
+
+    def test_execute_non_2xx_raises_module_error(self, monkeypatch) -> None:
+        """Non-2xx response must raise ModuleError."""
+        from apcore.errors import ModuleError
+
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.headers = {"content-type": "text/plain"}
+        mock_response.text = "not found"
+        module_instance = self._setup(monkeypatch, self._mock_client(mock_response))
+
+        with pytest.raises(ModuleError):
+            asyncio.run(module_instance.execute({}))

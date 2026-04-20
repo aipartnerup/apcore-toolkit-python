@@ -25,10 +25,12 @@ Framework-specific ``ScannedModule`` subclasses with top-level
 """
 
 import logging
+import re
 from collections.abc import Callable
 from typing import Any
 
-from apcore import DEFAULT_ANNOTATIONS, Registry
+from apcore import DEFAULT_ANNOTATIONS, ErrorCodes, Registry
+from apcore.errors import ModuleError
 from apcore_toolkit.http_verb_map import extract_path_param_names, substitute_path_params
 from apcore_toolkit.output.types import WriteResult
 from apcore_toolkit.types import ScannedModule
@@ -48,8 +50,15 @@ def _get_http_fields(mod: Any) -> tuple[str, str]:
     - Toolkit ScannedModule (fields in ``metadata`` dict)
     - Framework-specific ScannedModule (top-level attributes)
     """
-    http_method = getattr(mod, "http_method", None) or mod.metadata.get("http_method", "GET")
-    url_path = getattr(mod, "url_path", None) or mod.metadata.get("url_path", "/")
+    metadata = (mod.metadata or {}) if hasattr(mod, "metadata") else {}
+    http_method = getattr(mod, "http_method", None)
+    if not http_method:
+        http_method = metadata.get("http_method", "GET")
+    if not http_method:
+        raise ValueError(f"empty http_method for {mod.module_id!r}")
+    url_path = getattr(mod, "url_path", None)
+    if not url_path:
+        url_path = metadata.get("url_path", "/") or "/"
     return str(http_method), str(url_path)
 
 
@@ -120,8 +129,8 @@ class HTTPProxyRegistryWriter:
 
         # Raw dict schemas are auto-wrapped by Registry._ensure_schema_adapter
         # (apcore >= 0.13.1) during register(), so no manual wrapping needed.
-        raw_input = dict(mod.input_schema)
-        raw_output = dict(mod.output_schema)
+        raw_input = dict(mod.input_schema or {})
+        raw_output = dict(mod.output_schema or {})
 
         class ProxyModule:
             input_schema = raw_input
@@ -134,7 +143,12 @@ class HTTPProxyRegistryWriter:
 
                 headers: dict[str, str] = {}
                 if auth_factory is not None:
-                    headers.update(auth_factory())
+                    auth_result = auth_factory()
+                    if not isinstance(auth_result, dict):
+                        raise TypeError(
+                            f"auth_header_factory must return dict[str, str], got {type(auth_result).__name__}"
+                        )
+                    headers.update(auth_result)
 
                 # Separate path params from the rest; substitute both
                 # brace-style and colon-style placeholders via the shared
@@ -154,28 +168,46 @@ class HTTPProxyRegistryWriter:
                         kwargs["params"] = non_path
 
                 transport = _httpx.AsyncHTTPTransport(retries=0)
-                async with _httpx.AsyncClient(transport=transport, base_url=base_url, timeout=timeout) as client:
-                    resp = await client.request(http_method, actual_path, headers=headers, **kwargs)
+                try:
+                    async with _httpx.AsyncClient(transport=transport, base_url=base_url, timeout=timeout) as client:
+                        resp = await client.request(http_method, actual_path, headers=headers, **kwargs)
+                except _httpx.HTTPError as exc:
+                    raise ModuleError(
+                        code=ErrorCodes.MODULE_EXECUTE_ERROR,
+                        message=f"HTTP transport error: {exc}",
+                        details={},
+                    ) from exc
 
                 if 200 <= resp.status_code < 300:
                     if resp.status_code == 204:
                         return {}
-                    return resp.json()  # type: ignore[no-any-return]
+                    try:
+                        body = resp.json()
+                    except ValueError as exc:
+                        raise ModuleError(
+                            code=ErrorCodes.MODULE_EXECUTE_ERROR,
+                            message=f"HTTP {resp.status_code}: invalid JSON in response body",
+                            details={"http_status": resp.status_code},
+                        ) from exc
+                    if not isinstance(body, dict):
+                        raise ModuleError(
+                            code=ErrorCodes.MODULE_EXECUTE_ERROR,
+                            message=f"HTTP {resp.status_code}: expected JSON object, got {type(body).__name__}",
+                            details={"http_status": resp.status_code},
+                        )
+                    return body
 
                 error_msg = _extract_error_message(resp)
-                from apcore import ErrorCodes
-                from apcore.errors import ModuleError
-
                 raise ModuleError(
                     code=ErrorCodes.MODULE_EXECUTE_ERROR,
                     message=f"HTTP {resp.status_code}: {error_msg}",
                     details={"http_status": resp.status_code},
                 )
 
-        ProxyModule.__name__ = mod.module_id.replace(".", "_")
+        ProxyModule.__name__ = re.sub(r"\W", "_", mod.module_id)
         ProxyModule.__qualname__ = ProxyModule.__name__
         ProxyModule.annotations = annotations  # type: ignore[assignment]
-        ProxyModule.tags = mod.tags  # type: ignore[attr-defined]
+        ProxyModule.tags = list(mod.tags if isinstance(mod.tags, list) else [])  # type: ignore[attr-defined]
 
         return ProxyModule
 
