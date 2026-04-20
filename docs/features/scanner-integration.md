@@ -170,8 +170,10 @@ class ScannedModule:
     examples: list[ModuleExample] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    # Added in v0.5.0 (appended to avoid breaking positional construction
-    # patterns established in earlier releases).
+    # Added in v0.5.0. Inserting suggested_alias at position 10 (after documentation)
+    # shifted examples→11, metadata→12, warnings→13, display→14. Any positional
+    # caller passing examples/metadata/warnings will break on upgrade from 0.4.x —
+    # use keyword-only construction (the norm in all framework scanners).
     display: dict[str, Any] | None = None
 ```
 
@@ -251,6 +253,43 @@ class TestSuggestedAlias:
 | T-TYP-SA-03 | `test_explicit_none` | Explicit None passes through |
 | T-TYP-SA-04 | `test_field_is_independent_of_metadata` | Field and metadata coexist |
 | T-TYP-SA-05 | `test_dataclasses_replace_preserves_field` | `replace()` compatibility |
+
+```python
+class TestDisplayField:
+    def _make_base_module(self, **overrides: Any) -> ScannedModule:
+        defaults: dict[str, Any] = {
+            "module_id": "tasks.user_data.post",
+            "description": "Create task data",
+            "input_schema": {"type": "object", "properties": {}},
+            "output_schema": {"type": "object", "properties": {}},
+            "tags": [],
+            "target": "mod:func",
+        }
+        defaults.update(overrides)
+        return ScannedModule(**defaults)
+
+    def test_display_default_is_none(self) -> None:
+        mod = self._make_base_module()
+        assert mod.display is None
+
+    def test_display_set_via_constructor(self) -> None:
+        mod = self._make_base_module(display={"cli": {"group": "ops"}})
+        assert mod.display == {"cli": {"group": "ops"}}
+
+    def test_display_independent_of_metadata_display(self) -> None:
+        mod = self._make_base_module(
+            display={"cli": {"group": "ops"}},
+            metadata={"display": {"cli": {"group": "infra"}}},
+        )
+        assert mod.display == {"cli": {"group": "ops"}}
+        assert mod.metadata["display"] == {"cli": {"group": "infra"}}
+```
+
+| Test ID | Method | Coverage |
+|---|---|---|
+| T-TYP-DISP-01 | `test_display_default_is_none` | Default value is None |
+| T-TYP-DISP-02 | `test_display_set_via_constructor` | Constructor assignment |
+| T-TYP-DISP-03 | `test_display_independent_of_metadata_display` | `display` and `metadata["display"]` are independent |
 
 ---
 
