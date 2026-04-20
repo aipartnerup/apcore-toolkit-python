@@ -70,11 +70,17 @@ class BaseScanner(ABC):
         result = modules
 
         if include is not None:
-            pattern = re.compile(include)
+            try:
+                pattern = re.compile(include)
+            except re.error as exc:
+                raise ValueError(f"invalid include/exclude pattern: {include!r}") from exc
             result = [m for m in result if pattern.search(m.module_id)]
 
         if exclude is not None:
-            pattern = re.compile(exclude)
+            try:
+                pattern = re.compile(exclude)
+            except re.error as exc:
+                raise ValueError(f"invalid include/exclude pattern: {exclude!r}") from exc
             result = [m for m in result if not pattern.search(m.module_id)]
 
         return result

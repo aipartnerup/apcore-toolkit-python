@@ -16,6 +16,8 @@ import importlib.util
 import inspect
 import logging
 import sys
+import types as _types
+import typing
 from pathlib import Path
 from typing import Any, get_type_hints
 
@@ -124,7 +126,8 @@ class ConventionScanner:
         # Read module-level constants
         module_prefix = getattr(mod, "MODULE_PREFIX", None)
         cli_group = getattr(mod, "CLI_GROUP", None)
-        file_tags = getattr(mod, "TAGS", None) or []
+        _raw_tags = getattr(mod, "TAGS", None)
+        file_tags = _raw_tags if isinstance(_raw_tags, list) else []
 
         prefix = module_prefix if isinstance(module_prefix, str) else file_prefix
 
@@ -219,15 +222,21 @@ class ConventionScanner:
     def _type_to_schema(self, type_hint: Any) -> dict[str, Any]:
         """Convert a Python type hint to JSON Schema."""
         if type_hint is None:
-            return {"type": "string"}
+            return {}
 
         # Direct type mapping
         if type_hint in _BUILTIN_TYPE_TO_SCHEMA:
             return dict(_BUILTIN_TYPE_TO_SCHEMA[type_hint])
 
-        # Handle Optional[X] / X | None
         origin = getattr(type_hint, "__origin__", None)
         args = getattr(type_hint, "__args__", None)
+
+        # Handle typing.Optional[X] (origin=Union) and PEP 604 X | None (UnionType)
+        if origin is typing.Union or isinstance(type_hint, _types.UnionType):
+            non_none = [a for a in (args or ()) if a is not type(None)]
+            if len(non_none) == 1:
+                return self._type_to_schema(non_none[0])
+            return {"anyOf": [self._type_to_schema(a) for a in non_none]}
 
         if origin is list and args:
             return {"type": "array", "items": self._type_to_schema(args[0])}
