@@ -253,10 +253,7 @@ class TestTypeToSchema:
     def test_optional_int_param_schema(self, scanner, tmp_path):
         """typing.Optional[int] must not silently produce {"type":"string"}."""
         (tmp_path / "f.py").write_text(
-            "from typing import Optional\n"
-            "def fn(x: Optional[int]) -> dict:\n"
-            '    """F."""\n'
-            "    return {}\n"
+            "from typing import Optional\n" "def fn(x: Optional[int]) -> dict:\n" '    """F."""\n' "    return {}\n"
         )
         modules = scanner.scan(tmp_path)
         schema = modules[0].input_schema["properties"]["x"]
@@ -264,22 +261,14 @@ class TestTypeToSchema:
 
     def test_pep604_int_or_none_param_schema(self, scanner, tmp_path):
         """PEP 604 int | None annotation must not silently produce {"type":"string"}."""
-        (tmp_path / "f.py").write_text(
-            "def fn(x: int | None) -> dict:\n"
-            '    """F."""\n'
-            "    return {}\n"
-        )
+        (tmp_path / "f.py").write_text("def fn(x: int | None) -> dict:\n" '    """F."""\n' "    return {}\n")
         modules = scanner.scan(tmp_path)
         schema = modules[0].input_schema["properties"]["x"]
         assert schema.get("type") == "integer"
 
     def test_unannotated_param_not_typed_as_string(self, scanner, tmp_path):
         """A parameter with no annotation must not become {"type":"string"}."""
-        (tmp_path / "f.py").write_text(
-            "def fn(x) -> dict:\n"
-            '    """F."""\n'
-            "    return {}\n"
-        )
+        (tmp_path / "f.py").write_text("def fn(x) -> dict:\n" '    """F."""\n' "    return {}\n")
         modules = scanner.scan(tmp_path)
         schema = modules[0].input_schema["properties"]["x"]
         assert schema.get("type") != "string"
@@ -291,8 +280,7 @@ class TestTAGSShapeGuard:
     def test_string_tags_constant_does_not_produce_character_list(self, scanner, tmp_path):
         """TAGS = "deploy" must produce [] or ["deploy"], never list("deploy")."""
         (tmp_path / "deploy.py").write_text(
-            'TAGS = "deploy"\n\n'
-            'def deploy(env: str) -> dict:\n    """Deploy."""\n    return {}\n'
+            'TAGS = "deploy"\n\n' 'def deploy(env: str) -> dict:\n    """Deploy."""\n    return {}\n'
         )
         modules = scanner.scan(tmp_path)
         assert modules[0].tags != list("deploy"), "Character list from string TAGS detected"
@@ -300,8 +288,7 @@ class TestTAGSShapeGuard:
     def test_integer_tags_constant_produces_empty_list(self, scanner, tmp_path):
         """TAGS = 42 (invalid type) must fall back to empty list."""
         (tmp_path / "deploy.py").write_text(
-            "TAGS = 42\n\n"
-            'def deploy(env: str) -> dict:\n    """Deploy."""\n    return {}\n'
+            "TAGS = 42\n\n" 'def deploy(env: str) -> dict:\n    """Deploy."""\n    return {}\n'
         )
         modules = scanner.scan(tmp_path)
         assert modules[0].tags == []
