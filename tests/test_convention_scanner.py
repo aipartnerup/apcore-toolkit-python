@@ -127,9 +127,7 @@ class TestConventionScannerFailureLogging:
     """Verify scan() preserves traceback context on per-file failures."""
 
     def test_import_failure_log_includes_traceback(self, scanner, tmp_path, caplog):
-        (tmp_path / "broken.py").write_text(
-            "def _bang():\n    raise RuntimeError('kaboom at import')\n\n_bang()\n"
-        )
+        (tmp_path / "broken.py").write_text("def _bang():\n    raise RuntimeError('kaboom at import')\n\n_bang()\n")
         with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
             scanner.scan(tmp_path)
 

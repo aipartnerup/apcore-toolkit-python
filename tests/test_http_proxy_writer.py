@@ -298,9 +298,9 @@ class TestHTTPProxyRegistryWriter:
         assert "synthetic build failure" in (results[0].verification_error or "")
         failures = [r for r in caplog.records if "failed to register" in r.getMessage()]
         assert failures, "expected at least one WARNING record for the failed module"
-        assert all(r.exc_info is not None for r in failures), (
-            "WARNING records for registration failures must carry exc_info"
-        )
+        assert all(
+            r.exc_info is not None for r in failures
+        ), "WARNING records for registration failures must carry exc_info"
 
     def test_no_auth_headers_when_factory_is_none(self) -> None:
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
