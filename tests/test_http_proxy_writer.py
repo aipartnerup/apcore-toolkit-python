@@ -309,3 +309,54 @@ class TestHTTPProxyRegistryWriter:
     def test_custom_timeout(self) -> None:
         writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000", timeout=120.0)
         assert writer._timeout == 120.0
+
+
+class TestExtractErrorMessage:
+    """_extract_error_message: except must be narrow (ValueError/AttributeError), not bare Exception."""
+
+    def _make_resp(
+        self,
+        *,
+        content_type: str = "application/json",
+        json_side_effect: Exception | None = None,
+        json_return: dict | None = None,
+        text: str = "fallback text",
+    ) -> MagicMock:
+        resp = MagicMock()
+        resp.headers = {"content-type": content_type}
+        resp.text = text
+        if json_side_effect is not None:
+            resp.json.side_effect = json_side_effect
+        else:
+            resp.json.return_value = json_return or {}
+        return resp
+
+    def test_json_value_error_falls_through_to_text(self) -> None:
+        """resp.json() raising ValueError (bad JSON body) must return text fallback."""
+        from apcore_toolkit.output.http_proxy_writer import _extract_error_message
+
+        resp = self._make_resp(json_side_effect=ValueError("bad json"), text="raw error")
+        assert _extract_error_message(resp) == "raw error"
+
+    def test_non_json_content_type_returns_text(self) -> None:
+        """Non-JSON content-type must skip json() entirely and return text."""
+        from apcore_toolkit.output.http_proxy_writer import _extract_error_message
+
+        resp = self._make_resp(content_type="text/plain", text="plain error")
+        assert _extract_error_message(resp) == "plain error"
+
+    def test_json_error_message_key_used(self) -> None:
+        """error_message key takes priority."""
+        from apcore_toolkit.output.http_proxy_writer import _extract_error_message
+
+        resp = self._make_resp(json_return={"error_message": "specific error"})
+        assert _extract_error_message(resp) == "specific error"
+
+    def test_non_value_error_from_json_propagates(self) -> None:
+        """After fix: a RuntimeError from resp.json() must not be silently swallowed."""
+        import pytest
+        from apcore_toolkit.output.http_proxy_writer import _extract_error_message
+
+        resp = self._make_resp(json_side_effect=RuntimeError("unexpected crash"))
+        with pytest.raises(RuntimeError, match="unexpected crash"):
+            _extract_error_message(resp)

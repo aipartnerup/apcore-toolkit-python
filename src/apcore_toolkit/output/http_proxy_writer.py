@@ -193,6 +193,8 @@ def _extract_error_message(resp: Any) -> str:
                 or body.get("message")
                 or resp.text[:200]
             )
-        except Exception:
-            pass
+        except (ValueError, AttributeError):
+            # ValueError: JSONDecodeError (bad body despite content-type header)
+            # AttributeError: resp.json() returned a non-dict
+            logger.debug("_extract_error_message: could not parse JSON body — falling back to text")
     return resp.text[:200]
