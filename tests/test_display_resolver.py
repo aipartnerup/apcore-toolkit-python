@@ -527,3 +527,96 @@ class TestSuggestedAliasDualSource:
         [resolved] = self.resolver.resolve([FakeMod()])
         # Falls through to metadata since getattr defaults to None.
         assert resolved.metadata["display"]["alias"] == "foo.bar.list"
+
+
+class TestMalformedBindingYAML:
+    """display.{cli,mcp,a2a} supplied as a non-dict value (common YAML typo) must not crash."""
+
+    def setup_method(self) -> None:
+        self.resolver = DisplayResolver()
+
+    def _make_module(self, module_id: str = "tasks.create") -> ScannedModule:
+        return ScannedModule(
+            module_id=module_id,
+            description="Create a task",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="mod:func",
+        )
+
+    def test_display_cli_as_string_is_coerced_to_empty_dict(self) -> None:
+        """display.cli: "tasks-create" (string typo) must not raise AttributeError."""
+        mod = self._make_module()
+        binding_data = {
+            "bindings": [
+                {
+                    "module_id": "tasks.create",
+                    "display": {
+                        "alias": "tasks.create",
+                        "cli": "tasks-create",  # should be a dict
+                    },
+                }
+            ]
+        }
+        result = self.resolver.resolve([mod], binding_data=binding_data)
+        d = result[0].metadata["display"]
+        assert d["cli"]["alias"] == "tasks.create"
+
+    def test_display_mcp_as_string_is_coerced_to_empty_dict(self) -> None:
+        """display.mcp: "tasks_create" (string typo) must not raise AttributeError."""
+        mod = self._make_module()
+        binding_data = {
+            "bindings": [
+                {
+                    "module_id": "tasks.create",
+                    "display": {
+                        "alias": "tasks.create",
+                        "mcp": "tasks_create",  # should be a dict
+                    },
+                }
+            ]
+        }
+        result = self.resolver.resolve([mod], binding_data=binding_data)
+        d = result[0].metadata["display"]
+        assert d["mcp"]["alias"] == "tasks_create"
+
+    def test_display_a2a_as_string_is_coerced_to_empty_dict(self) -> None:
+        """display.a2a as a non-dict must not raise AttributeError."""
+        mod = self._make_module()
+        binding_data = {
+            "bindings": [
+                {
+                    "module_id": "tasks.create",
+                    "display": {
+                        "alias": "tasks.create",
+                        "a2a": 42,  # should be a dict
+                    },
+                }
+            ]
+        }
+        result = self.resolver.resolve([mod], binding_data=binding_data)
+        d = result[0].metadata["display"]
+        assert d["a2a"]["alias"] == "tasks.create"
+
+    def test_all_surfaces_as_non_dict_fall_through_to_defaults(self) -> None:
+        """All three surfaces malformed: all fall through to display-level defaults."""
+        mod = self._make_module("img.resize")
+        binding_data = {
+            "bindings": [
+                {
+                    "module_id": "img.resize",
+                    "display": {
+                        "alias": "img.resize",
+                        "cli": "bad",
+                        "mcp": "bad",
+                        "a2a": "bad",
+                    },
+                }
+            ]
+        }
+        result = self.resolver.resolve([mod], binding_data=binding_data)
+        d = result[0].metadata["display"]
+        assert d["alias"] == "img.resize"
+        assert d["cli"]["alias"] == "img.resize"
+        assert d["mcp"]["alias"] == "img_resize"  # dot replaced by sanitizer

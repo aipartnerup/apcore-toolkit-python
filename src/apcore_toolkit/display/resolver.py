@@ -153,7 +153,16 @@ class DisplayResolver:
         # ── Resolve per-surface fields ───────────────────────────────────
         def _surface(key: str) -> tuple[dict[str, Any], bool]:
             """Return (surface_dict, alias_was_explicit)."""
-            sc: dict[str, Any] = display_cfg.get(key) or {}
+            sc_raw = display_cfg.get(key)
+            if sc_raw is not None and not isinstance(sc_raw, dict):
+                logger.warning(
+                    "Module '%s': display.%s must be a dict, got %s — ignoring.",
+                    mod.module_id,
+                    key,
+                    type(sc_raw).__name__,
+                )
+                sc_raw = None
+            sc: dict[str, Any] = sc_raw or {}
             alias_explicit = bool(sc.get("alias"))
             return (
                 {
