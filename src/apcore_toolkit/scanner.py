@@ -173,3 +173,46 @@ class BaseScanner(ABC):
             else:
                 result.append(module)
         return result
+
+
+# ---------------------------------------------------------------------------
+# Module-level wrappers for tri-language parity.
+#
+# Rust exports `filter_modules`, `infer_annotations_from_method`, and
+# `deduplicate_ids` as free functions at the crate root. These wrappers
+# expose the same symbols at the Python module level so users can write
+# `from apcore_toolkit import filter_modules` without instantiating
+# BaseScanner first.
+# ---------------------------------------------------------------------------
+
+
+def filter_modules(
+    modules: list[ScannedModule],
+    include: str | None = None,
+    exclude: str | None = None,
+) -> list[ScannedModule]:
+    """Free-function form of :meth:`BaseScanner.filter_modules`."""
+    return BaseScanner.filter_modules(modules, include=include, exclude=exclude)
+
+
+def infer_annotations_from_method(method: str) -> ModuleAnnotations:
+    """Free-function form of :meth:`BaseScanner.infer_annotations_from_method`."""
+    return BaseScanner.infer_annotations_from_method(method)
+
+
+def deduplicate_ids(modules: list[ScannedModule]) -> list[ScannedModule]:
+    """Free-function form of :meth:`BaseScanner.deduplicate_ids`.
+
+    The underlying algorithm is stateless, so this helper constructs a
+    tiny concrete subclass on the fly to reuse the method body without
+    duplicating logic.
+    """
+
+    class _Helper(BaseScanner):
+        def scan(self, **_: Any) -> list[ScannedModule]:  # pragma: no cover
+            return []
+
+        def get_source_name(self) -> str:  # pragma: no cover
+            return "_deduplicate_ids_helper"
+
+    return _Helper().deduplicate_ids(modules)

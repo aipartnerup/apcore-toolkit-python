@@ -276,3 +276,54 @@ class TestBaseScannerGenerateSuggestedAlias:
     def test_case_insensitive_method(self) -> None:
         result = BaseScanner.generate_suggested_alias("/tasks", "post")
         assert result == "tasks.create"
+
+
+class TestModuleLevelWrappers:
+    """Tri-language parity: Rust exports these as free functions at crate root."""
+
+    def test_filter_modules_is_exported_at_package_root(self) -> None:
+        from apcore_toolkit import filter_modules
+
+        modules = [_make_module("users.list"), _make_module("tasks.list")]
+        result = filter_modules(modules, include=r"^users\.")
+        assert len(result) == 1
+        assert result[0].module_id == "users.list"
+
+    def test_infer_annotations_from_method_is_exported_at_package_root(self) -> None:
+        from apcore_toolkit import infer_annotations_from_method
+
+        annotations = infer_annotations_from_method("GET")
+        assert annotations.readonly is True
+
+    def test_deduplicate_ids_is_exported_at_package_root(self) -> None:
+        from apcore_toolkit import deduplicate_ids
+
+        modules = [
+            _make_module("users.list"),
+            _make_module("users.list"),
+            _make_module("users.list"),
+        ]
+        result = deduplicate_ids(modules)
+        assert [m.module_id for m in result] == ["users.list", "users.list_2", "users.list_3"]
+
+    def test_create_scanned_module_is_exported_at_package_root(self) -> None:
+        from apcore_toolkit import create_scanned_module
+
+        m = create_scanned_module(
+            module_id="a",
+            description="desc",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="pkg.mod:fn",
+        )
+        assert m.module_id == "a"
+
+    def test_clone_module_is_exported_at_package_root(self) -> None:
+        from apcore_toolkit import clone_module
+
+        original = _make_module("users.list")
+        cloned = clone_module(original, description="new desc")
+        assert cloned.module_id == "users.list"
+        assert cloned.description == "new desc"
+        assert original.description == "Module users.list"

@@ -41,10 +41,15 @@ from apcore_toolkit.http_verb_map import (
     resolve_http_verb,
     substitute_path_params,
 )
-from apcore_toolkit.scanner import BaseScanner
+from apcore_toolkit.scanner import (
+    BaseScanner,
+    deduplicate_ids,
+    filter_modules,
+    infer_annotations_from_method,
+)
 from apcore_toolkit.schema_utils import enrich_schema_descriptions
 from apcore_toolkit.serializers import annotations_to_dict, module_to_dict, modules_to_dicts
-from apcore_toolkit.types import ScannedModule
+from apcore_toolkit.types import ScannedModule, clone_module, create_scanned_module
 
 try:
     __version__ = _get_version("apcore-toolkit")
@@ -75,15 +80,20 @@ __all__ = [
     "YAMLVerifier",
     "YAMLWriter",
     "annotations_to_dict",
+    "clone_module",
+    "create_scanned_module",
+    "deduplicate_ids",
     "deep_resolve_refs",
     "enrich_schema_descriptions",
     "extract_input_schema",
     "extract_output_schema",
     "extract_path_param_names",
+    "filter_modules",
     "flatten_pydantic_params",
     "generate_suggested_alias",
     "get_writer",
     "has_path_params",
+    "infer_annotations_from_method",
     "module_to_dict",
     "modules_to_dicts",
     "resolve_http_verb",
