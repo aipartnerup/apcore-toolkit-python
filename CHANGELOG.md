@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **`apcore` minimum version bumped from 0.19.0 to 0.20.0** — `pyproject.toml` `dependencies` now requires `apcore>=0.20.0`. Toolkit only imports stable apcore surface (`ModuleAnnotations`, `DEFAULT_ANNOTATIONS`, `ModuleExample`, `Registry`, `ErrorCodes`, `parse_docstring`, `errors.ModuleError`); none of these were affected by 0.20.0 changes. Full pytest suite (585 passed) verified against apcore 0.20.0.
+
 ### Added
 
 - **Surface-aware formatters** (refs aiperceivable/apcore-toolkit#13) — `format_module`, `format_schema`, `format_modules` for rendering `ScannedModule` and JSON Schema for specific consumer surfaces. Four styles for `format_module`: `markdown` (LLM context), `skill` (drop-in `.claude/skills/<id>/SKILL.md` or `.gemini/skills/<id>/SKILL.md` body with minimal `name` + `description` frontmatter — no vendor-specific extensions), `table-row` (CLI listing), `json` (programmatic). `format_schema` styles: `prose`, `table`, `json`. `format_modules` adds optional `group_by="tag" | "prefix"`. `display=True` (default) prefers the `ScannedModule.display` overlay over raw fields. Lives in `apcore_toolkit.formatting.surface`; re-exported at the top-level package.
