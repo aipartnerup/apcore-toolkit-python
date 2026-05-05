@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 from apcore import ModuleAnnotations
@@ -151,9 +150,7 @@ class TestFormatModuleMarkdown:
     def test_examples_emitted_when_present(self) -> None:
         from apcore import ModuleExample
 
-        module = _fixture_module(
-            examples=[ModuleExample(title="lookup", inputs={"id": 1}, output={"name": "Ada"})]
-        )
+        module = _fixture_module(examples=[ModuleExample(title="lookup", inputs={"id": 1}, output={"name": "Ada"})])
         out = format_module(module, style="markdown")
         assert "## Examples" in out
         assert "Ada" in out
@@ -217,9 +214,7 @@ class TestDisplayOverlay:
         assert "`accounts`" in out
 
     def test_display_false_uses_raw(self) -> None:
-        module = _fixture_module(
-            display={"alias": "lookup-user", "description": "ignored"}
-        )
+        module = _fixture_module(display={"alias": "lookup-user", "description": "ignored"})
         out = format_module(module, style="markdown", display=False)
         assert "# users.get_user" in out
         assert "Look up a user by id" in out

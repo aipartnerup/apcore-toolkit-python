@@ -42,9 +42,7 @@ def format_schema(
     ``apcore-toolkit/docs/features/formatting.md``.
     """
     if style not in _SCHEMA_STYLES:
-        raise ValueError(
-            f"format_schema: unknown style {style!r}; expected one of {_SCHEMA_STYLES}"
-        )
+        raise ValueError(f"format_schema: unknown style {style!r}; expected one of {_SCHEMA_STYLES}")
     if style == "json":
         return schema
 
@@ -82,11 +80,7 @@ def _format_schema_prose(
         if desc:
             head += f" — {desc}"
         lines.append(head)
-        if (
-            isinstance(prop, dict)
-            and prop.get("type") == "object"
-            and isinstance(prop.get("properties"), dict)
-        ):
+        if isinstance(prop, dict) and prop.get("type") == "object" and isinstance(prop.get("properties"), dict):
             if depth + 1 >= max_depth:
                 lines.append("  ```json")
                 for json_line in json.dumps(prop, indent=2).splitlines():
@@ -138,9 +132,7 @@ def format_module(
     ``apcore-toolkit/docs/features/formatting.md``.
     """
     if style not in _MODULE_STYLES:
-        raise ValueError(
-            f"format_module: unknown style {style!r}; expected one of {_MODULE_STYLES}"
-        )
+        raise ValueError(f"format_module: unknown style {style!r}; expected one of {_MODULE_STYLES}")
 
     if style == "json":
         return module_to_dict(module)
@@ -301,21 +293,15 @@ def format_modules(
     ``apcore-toolkit/docs/features/formatting.md``.
     """
     if style not in _MODULE_STYLES:
-        raise ValueError(
-            f"format_modules: unknown style {style!r}; expected one of {_MODULE_STYLES}"
-        )
+        raise ValueError(f"format_modules: unknown style {style!r}; expected one of {_MODULE_STYLES}")
     if group_by is not None and group_by not in _GROUP_BY_VALUES:
-        raise ValueError(
-            f"format_modules: unknown group_by {group_by!r}; expected one of {_GROUP_BY_VALUES} or None"
-        )
+        raise ValueError(f"format_modules: unknown group_by {group_by!r}; expected one of {_GROUP_BY_VALUES} or None")
 
     if style == "json":
         return [module_to_dict(m) for m in modules]
 
     if group_by is None:
-        rendered = [
-            format_module(m, style=style, display=display) for m in modules
-        ]
+        rendered = [format_module(m, style=style, display=display) for m in modules]
         joiner = "\n\n" if style in ("markdown", "skill") else "\n"
         return joiner.join(str(r) for r in rendered)
 
