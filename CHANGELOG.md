@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-05
+
 ### Changed
 
 - **`apcore` minimum version bumped from 0.19.0 to 0.20.0** — `pyproject.toml` `dependencies` now requires `apcore>=0.20.0`. Toolkit only imports stable apcore surface (`ModuleAnnotations`, `DEFAULT_ANNOTATIONS`, `ModuleExample`, `Registry`, `ErrorCodes`, `parse_docstring`, `errors.ModuleError`); none of these were affected by 0.20.0 changes. Full pytest suite (585 passed) verified against apcore 0.20.0.
