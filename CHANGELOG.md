@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Surface-aware formatters** (refs aiperceivable/apcore-toolkit#13) — `format_module`, `format_schema`, `format_modules` for rendering `ScannedModule` and JSON Schema for specific consumer surfaces. Four styles for `format_module`: `markdown` (LLM context), `skill` (drop-in `.claude/skills/<id>/SKILL.md` or `.gemini/skills/<id>/SKILL.md` body with minimal `name` + `description` frontmatter — no vendor-specific extensions), `table-row` (CLI listing), `json` (programmatic). `format_schema` styles: `prose`, `table`, `json`. `format_modules` adds optional `group_by="tag" | "prefix"`. `display=True` (default) prefers the `ScannedModule.display` overlay over raw fields. Lives in `apcore_toolkit.formatting.surface`; re-exported at the top-level package.
+- **Annotation-table cross-SDK alignment** — `format_module(style="markdown" | "skill")` `## Behavior` table now emits only fields that differ from `ModuleAnnotations()` defaults, sorts rows alphabetically by snake_case key, and renders bool values as lowercase `true`/`false`. The section is omitted entirely when every annotation field matches its default. Closes the byte-equality gap with the TypeScript and Rust SDKs.
 
 ### Changed
 

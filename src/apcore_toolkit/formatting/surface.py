@@ -11,8 +11,15 @@ import dataclasses
 import json
 from typing import Any, Literal
 
+from apcore import ModuleAnnotations
+
 from apcore_toolkit.serializers import annotations_to_dict, module_to_dict
 from apcore_toolkit.types import ScannedModule
+
+# Snake-case dict of every default-valued annotation field. Used by the
+# behavior-table renderer to skip fields that match the protocol default,
+# keeping the table focused on what is actually non-default about the module.
+_DEFAULT_ANNOTATIONS_DICT: dict[str, Any] = annotations_to_dict(ModuleAnnotations()) or {}
 
 SchemaStyle = Literal["prose", "table", "json"]
 ModuleStyle = Literal["markdown", "skill", "table-row", "json"]
@@ -228,22 +235,44 @@ def _render_module_markdown_body(
 
 
 def _render_annotations_table(annotations: Any) -> str | None:
+    """Render `ModuleAnnotations` as a Markdown fact table.
+
+    Cross-SDK alignment rules (see
+    `apcore-toolkit/docs/features/formatting.md` § Annotations Rendering):
+
+    1. Emit only fields whose value differs from `ModuleAnnotations()` default.
+    2. The `extra` free-form bag is always skipped.
+    3. Rows are sorted alphabetically by snake_case key.
+    4. Bool values render as lowercase `true` / `false`; everything else uses
+       JSON serialisation for collections, `str()` for scalars.
+
+    Returns `None` when the resulting table would be empty (i.e. every
+    annotation field equals its default), causing the caller to omit the
+    `## Behavior` section entirely.
+    """
     data = annotations_to_dict(annotations)
     if not data:
         return None
-    # Filter out the "extra" free-form bag and falsy / None entries.
     entries: list[tuple[str, Any]] = []
     for key, value in data.items():
         if key == "extra":
             continue
-        if value in (None, False, [], {}, ""):
+        if _DEFAULT_ANNOTATIONS_DICT.get(key) == value:
             continue
         entries.append((key, value))
     if not entries:
         return None
+    entries.sort(key=lambda kv: kv[0])
     rows = ["| Flag | Value |", "|---|---|"]
     for key, value in entries:
-        rendered = json.dumps(value, ensure_ascii=False) if isinstance(value, (list, dict)) else str(value)
+        if value is True:
+            rendered = "true"
+        elif value is False:
+            rendered = "false"
+        elif isinstance(value, (list, dict)):
+            rendered = json.dumps(value, ensure_ascii=False)
+        else:
+            rendered = str(value)
         rows.append(f"| `{key}` | {rendered} |")
     return "\n".join(rows)
 

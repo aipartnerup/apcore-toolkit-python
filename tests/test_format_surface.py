@@ -114,8 +114,39 @@ class TestFormatModuleMarkdown:
         assert "| Flag | Value |" in out
         assert "`readonly`" in out
         assert "`cacheable`" in out
-        # destructive=False should not be listed (only true / non-falsy flags).
+        # destructive=False matches the default, so it must not appear.
         assert "`destructive`" not in out
+
+    def test_annotations_bools_lowercase(self) -> None:
+        out = format_module(_fixture_module(), style="markdown")
+        assert "| `readonly` | true |" in out
+        assert "| `cacheable` | true |" in out
+        # Python's str(True) == "True" must NOT leak through.
+        assert "| `readonly` | True |" not in out
+
+    def test_annotations_rows_alphabetical(self) -> None:
+        out = format_module(_fixture_module(), style="markdown")
+        readonly_idx = out.index("`readonly`")
+        cacheable_idx = out.index("`cacheable`")
+        # 'cacheable' < 'readonly' alphabetically
+        assert cacheable_idx < readonly_idx
+
+    def test_annotations_skips_default_values(self) -> None:
+        """`pagination_style` defaults to 'cursor'; default-value rows are skipped."""
+        out = format_module(_fixture_module(), style="markdown")
+        assert "`pagination_style`" not in out
+
+    def test_behavior_section_omitted_when_all_default(self) -> None:
+        from apcore import ModuleAnnotations as _Annotations
+
+        module = _fixture_module(annotations=_Annotations())
+        out = format_module(module, style="markdown")
+        assert "## Behavior" not in out
+
+    def test_behavior_section_omitted_when_annotations_none(self) -> None:
+        module = _fixture_module(annotations=None)
+        out = format_module(module, style="markdown")
+        assert "## Behavior" not in out
 
     def test_examples_emitted_when_present(self) -> None:
         from apcore import ModuleExample
