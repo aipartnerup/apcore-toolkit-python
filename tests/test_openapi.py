@@ -263,6 +263,73 @@ class TestDeepResolveRefsPublic:
 
         assert callable(public_fn)
 
+    def test_additional_properties_ref(self) -> None:
+        schema = {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/components/schemas/Address"},
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["additionalProperties"]["type"] == "object"
+        assert "street" in result["additionalProperties"]["properties"]
+
+    def test_pattern_properties_ref(self) -> None:
+        schema = {
+            "type": "object",
+            "patternProperties": {
+                "^S_": {"$ref": "#/components/schemas/Address"},
+            },
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["patternProperties"]["^S_"]["type"] == "object"
+        assert "city" in result["patternProperties"]["^S_"]["properties"]
+
+    def test_not_ref(self) -> None:
+        schema = {"not": {"$ref": "#/components/schemas/User"}}
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["not"]["type"] == "object"
+        assert "id" in result["not"]["properties"]
+
+    def test_if_then_else_refs(self) -> None:
+        schema = {
+            "if": {"$ref": "#/components/schemas/User"},
+            "then": {"$ref": "#/components/schemas/Address"},
+            "else": {"type": "null"},
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["if"]["type"] == "object"
+        assert "id" in result["if"]["properties"]
+        assert result["then"]["type"] == "object"
+        assert "street" in result["then"]["properties"]
+        assert result["else"] == {"type": "null"}
+
+    def test_prefix_items_refs(self) -> None:
+        schema = {
+            "type": "array",
+            "prefixItems": [
+                {"$ref": "#/components/schemas/User"},
+                {"$ref": "#/components/schemas/Address"},
+            ],
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert result["prefixItems"][0]["type"] == "object"
+        assert "id" in result["prefixItems"][0]["properties"]
+        assert "street" in result["prefixItems"][1]["properties"]
+
+    def test_tuple_items_list_of_schemas(self) -> None:
+        # Tuple-form items: items is a list (draft-4 tuple validation)
+        schema = {
+            "type": "array",
+            "items": [
+                {"$ref": "#/components/schemas/User"},
+                {"$ref": "#/components/schemas/Address"},
+            ],
+        }
+        result = deep_resolve_refs(schema, OPENAPI_DOC)
+        assert isinstance(result["items"], list)
+        assert result["items"][0]["type"] == "object"
+        assert "id" in result["items"][0]["properties"]
+        assert "street" in result["items"][1]["properties"]
+
 
 class TestExtractInputSchema:
     def test_query_and_path_params(self) -> None:
@@ -426,3 +493,48 @@ class TestExtractOutputSchema:
     def test_empty_responses(self) -> None:
         result = extract_output_schema({})
         assert result == {"type": "object", "properties": {}}
+
+    def test_204_response_with_schema_is_extracted(self) -> None:
+        """D11-001: any 2xx status code with a schema body should be extracted."""
+        operation = {
+            "responses": {
+                "204": {
+                    "content": {
+                        "application/json": {
+                            "schema": {"type": "object", "properties": {"status": {"type": "string"}}}
+                        }
+                    }
+                }
+            }
+        }
+        result = extract_output_schema(operation)
+        assert result != {"type": "object", "properties": {}}
+        assert "status" in result["properties"]
+
+    def test_arbitrary_2xx_response_is_extracted(self) -> None:
+        """D11-001: non-standard 2xx codes like 206/299 should be accepted."""
+        operation = {
+            "responses": {
+                "206": {
+                    "content": {
+                        "application/json": {
+                            "schema": {"type": "object", "properties": {"partial": {"type": "boolean"}}}
+                        }
+                    }
+                }
+            }
+        }
+        result = extract_output_schema(operation)
+        assert "partial" in result["properties"]
+
+    def test_2xx_priority_order_lowest_wins(self) -> None:
+        """D11-001: when multiple 2xx codes exist, lowest (200 < 201 < 204) wins."""
+        operation = {
+            "responses": {
+                "204": {"content": {"application/json": {"schema": {"type": "string"}}}},
+                "200": {"content": {"application/json": {"schema": {"type": "integer"}}}},
+            }
+        }
+        result = extract_output_schema(operation)
+        # 200 should win over 204
+        assert result["type"] == "integer"

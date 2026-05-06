@@ -183,6 +183,7 @@ class TestYAMLWriterVerification:
     def test_verify_detects_corrupted_yaml(self, tmp_path: Path, sample_module: ScannedModule) -> None:
         # Write normally first
         results = self.writer.write([sample_module], str(tmp_path))
+        assert results[0].path is not None
         file_path = Path(results[0].path)
 
         # Corrupt the file
@@ -192,6 +193,7 @@ class TestYAMLWriterVerification:
         result = WriteResult(module_id="users.get_user", path=str(file_path))
         verified = YAMLWriter._verify(result, file_path)
         assert verified.verified is False
+        assert verified.verification_error is not None
         assert "Invalid YAML" in verified.verification_error
 
     def test_verify_detects_missing_bindings(self, tmp_path: Path) -> None:
@@ -201,6 +203,7 @@ class TestYAMLWriterVerification:
         result = WriteResult(module_id="test", path=str(file_path))
         verified = YAMLWriter._verify(result, file_path)
         assert verified.verified is False
+        assert verified.verification_error is not None
         assert "bindings" in verified.verification_error
 
     def test_verify_detects_missing_module_id(self, tmp_path: Path) -> None:
@@ -210,6 +213,7 @@ class TestYAMLWriterVerification:
         result = WriteResult(module_id="test", path=str(file_path))
         verified = YAMLWriter._verify(result, file_path)
         assert verified.verified is False
+        assert verified.verification_error is not None
         assert "module_id" in verified.verification_error
 
     def test_verify_not_run_in_dry_run(self, sample_module: ScannedModule) -> None:
@@ -217,3 +221,59 @@ class TestYAMLWriterVerification:
         assert len(results) == 1
         # dry_run skips verification, defaults to verified=True
         assert results[0].verified is True
+
+
+class TestYAMLWriterFilenameCollision:
+    """D11-010: filename collision tracker — modules that sanitize to the same name."""
+
+    def setup_method(self) -> None:
+        self.writer = YAMLWriter()
+
+    def test_two_modules_same_sanitized_name_produce_two_files(self, tmp_path: Path) -> None:
+        """'my/mod' and 'my:mod' both sanitize to 'my_mod'; second should get _1 suffix."""
+        mod1 = ScannedModule(
+            module_id="my/mod",
+            description="first",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f1",
+        )
+        mod2 = ScannedModule(
+            module_id="my:mod",
+            description="second",
+            input_schema={},
+            output_schema={},
+            tags=[],
+            target="m:f2",
+        )
+        results = self.writer.write([mod1, mod2], str(tmp_path))
+        assert len(results) == 2
+
+        files = {f.name for f in tmp_path.glob("*.binding.yaml")}
+        assert "my_mod.binding.yaml" in files
+        assert "my_mod_1.binding.yaml" in files
+        # No file should have been lost (two distinct files)
+        assert len(files) == 2
+
+    def test_three_modules_same_sanitized_name(self, tmp_path: Path) -> None:
+        """Three colliding modules get suffixes _1 and _2."""
+        # "my/mod", "my:mod", and "my@mod" all sanitize to "my_mod"
+        modules = [
+            ScannedModule(
+                module_id=module_id,
+                description=f"module {i}",
+                input_schema={},
+                output_schema={},
+                tags=[],
+                target=f"m:f{i}",
+            )
+            for i, module_id in enumerate(["my/mod", "my:mod", "my@mod"])
+        ]
+        results = self.writer.write(modules, str(tmp_path))
+        assert len(results) == 3
+
+        files = {f.name for f in tmp_path.glob("*.binding.yaml")}
+        assert "my_mod.binding.yaml" in files
+        assert "my_mod_1.binding.yaml" in files
+        assert "my_mod_2.binding.yaml" in files

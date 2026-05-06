@@ -21,7 +21,7 @@ logger = logging.getLogger("apcore_toolkit")
 class YAMLVerifier:
     """Verify that a YAML binding file is parseable and contains required fields."""
 
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, path: str, _module_id: str) -> VerifyResult:
         try:
             with open(path, encoding="utf-8") as f:
                 parsed = yaml.safe_load(f)
@@ -37,12 +37,16 @@ class YAMLVerifier:
         if not isinstance(bindings, list) or len(bindings) == 0:
             return VerifyResult(ok=False, error="Missing or empty 'bindings' list")
 
-        first = bindings[0]
-        if not isinstance(first, dict):
-            return VerifyResult(ok=False, error="First binding entry is not a mapping")
-        for field in ("module_id", "target"):
-            if not first.get(field):
-                return VerifyResult(ok=False, error=f"Missing required field '{field}' in binding")
+        for i, entry in enumerate(bindings):
+            if not isinstance(entry, dict):
+                return VerifyResult(ok=False, error=f"Binding entry {i} is not a mapping")
+            for field in ("module_id", "target"):
+                val = entry.get(field)
+                if not isinstance(val, str) or not val.strip():
+                    return VerifyResult(
+                        ok=False,
+                        error=f"Entry {i}: missing required field '{field}' in binding",
+                    )
 
         return VerifyResult(ok=True)
 
@@ -50,7 +54,7 @@ class YAMLVerifier:
 class SyntaxVerifier:
     """Verify that a Python source file has valid syntax."""
 
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, path: str, _module_id: str) -> VerifyResult:
         try:
             with open(path, encoding="utf-8") as f:
                 source = f.read()
@@ -72,7 +76,7 @@ class RegistryVerifier:
     def __init__(self, registry: Any) -> None:
         self._registry = registry
 
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, _path: str, module_id: str) -> VerifyResult:
         try:
             retrieved = self._registry.get(module_id)
             if retrieved is None:
@@ -95,7 +99,7 @@ class MagicBytesVerifier:
     def __init__(self, expected: bytes) -> None:
         self._expected = expected
 
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, path: str, _module_id: str) -> VerifyResult:
         try:
             with open(path, "rb") as f:
                 header = f.read(len(self._expected))
@@ -121,7 +125,7 @@ class JSONVerifier:
     def __init__(self, schema: dict[str, Any] | None = None) -> None:
         self._schema = schema
 
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, path: str, _module_id: str) -> VerifyResult:
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)

@@ -407,3 +407,55 @@ class TestMalformedFieldTypes:
         with pytest.raises(BindingLoadError) as exc_info:
             loader.load_data(data)
         assert exc_info.value.module_id == "my.module"
+
+
+# ---------------------------------------------------------------------------
+# D11-006: file size and file count limits
+# ---------------------------------------------------------------------------
+class TestBindingLoaderLimits:
+    """D11-006: BindingLoader enforces 16 MiB file size and 10,000 file count."""
+
+    def test_file_too_large_raises_binding_load_error(self, loader: BindingLoader, tmp_path: Path) -> None:
+        """A file whose size exceeds _MAX_BINDING_FILE_SIZE must raise BindingLoadError."""
+        from unittest.mock import patch
+        from apcore_toolkit.binding_loader import _MAX_BINDING_FILE_SIZE
+
+        # Write a minimal valid binding file
+        binding_file = tmp_path / "big.binding.yaml"
+        binding_file.write_text(
+            "spec_version: '1.0'\nbindings:\n  - module_id: x\n    target: m:f\n"
+        )
+
+        # Patch Path.stat at the module level so only the size check is affected.
+        # We call the real stat for is_file/is_dir checks (which use st_mode),
+        # but return an oversized st_size for the size limit check.
+        real_stat = Path.stat
+
+        class FakeStat:
+            st_mode = real_stat(binding_file).st_mode
+            st_size = _MAX_BINDING_FILE_SIZE + 1
+
+        def fake_stat(self, *args, **kwargs):  # noqa: N805
+            return FakeStat()
+
+        with patch.object(Path, "stat", fake_stat):
+            with pytest.raises(BindingLoadError, match="(?i)too large|file.*large|large.*file"):
+                loader.load(tmp_path)
+
+    def test_too_many_files_raises_binding_load_error(self, loader: BindingLoader, tmp_path: Path) -> None:
+        """More than _MAX_BINDING_FILES_PER_DIR files in a dir must raise BindingLoadError."""
+        from unittest.mock import patch, MagicMock
+        from pathlib import Path as _Path
+        from apcore_toolkit.binding_loader import _MAX_BINDING_FILES_PER_DIR
+
+        # Create one real file so the directory exists and is valid
+        (tmp_path / "real.binding.yaml").write_text(
+            "spec_version: '1.0'\nbindings:\n  - module_id: x\n    target: m:f\n"
+        )
+
+        # Build a fake glob result with too many entries
+        fake_files = [tmp_path / f"fake_{i}.binding.yaml" for i in range(_MAX_BINDING_FILES_PER_DIR + 1)]
+
+        with patch.object(_Path, "glob", return_value=iter(fake_files)):
+            with pytest.raises(BindingLoadError, match="(?i)too many"):
+                loader.load(tmp_path)

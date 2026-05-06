@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from typing import Any
 
-from apcore import DEFAULT_ANNOTATIONS, ModuleAnnotations, parse_docstring
+from apcore import DEFAULT_ANNOTATIONS, ModuleAnnotations
 from apcore_toolkit.types import ScannedModule
 
 
@@ -39,17 +39,6 @@ class BaseScanner(ABC):
     def get_source_name(self) -> str:
         """Return human-readable scanner name (e.g., 'django-ninja')."""
         ...
-
-    def extract_docstring(self, func: Any) -> tuple[str | None, str | None, dict[str, str]]:
-        """Extract description, documentation, and parameter descriptions from a function.
-
-        Convenience wrapper around apcore's docstring parser for use by
-        concrete scanner implementations.
-
-        Returns:
-            Tuple of (description, documentation, param_descriptions).
-        """
-        return parse_docstring(func)
 
     @staticmethod
     def filter_modules(

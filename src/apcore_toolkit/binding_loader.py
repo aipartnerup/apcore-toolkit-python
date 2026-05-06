@@ -24,6 +24,8 @@ logger = logging.getLogger("apcore_toolkit")
 _SUPPORTED_SPEC_VERSIONS = frozenset({"1.0"})
 _STRICT_REQUIRED = ("module_id", "target", "input_schema", "output_schema")
 _LOOSE_REQUIRED = ("module_id", "target")
+_MAX_BINDING_FILE_SIZE = 16 * 1024 * 1024  # 16 MiB
+_MAX_BINDING_FILES_PER_DIR = 10_000
 
 
 class BindingLoadError(Exception):
@@ -117,11 +119,21 @@ class BindingLoader:
         elif p.is_dir():
             pattern = "**/*.binding.yaml" if recursive else "*.binding.yaml"
             files = sorted(p.glob(pattern))
+            if len(files) > _MAX_BINDING_FILES_PER_DIR:
+                raise BindingLoadError(
+                    f"too many files in directory: {len(files)} exceeds limit of {_MAX_BINDING_FILES_PER_DIR}",
+                    file_path=str(p),
+                )
         else:
             raise BindingLoadError(f"path does not exist: {p}", file_path=str(p))
 
         modules: list[ScannedModule] = []
         for f in files:
+            if f.stat().st_size > _MAX_BINDING_FILE_SIZE:
+                raise BindingLoadError(
+                    f"file too large: {f.stat().st_size} bytes exceeds limit of {_MAX_BINDING_FILE_SIZE} bytes",
+                    file_path=str(f),
+                )
             try:
                 raw = yaml.safe_load(f.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:

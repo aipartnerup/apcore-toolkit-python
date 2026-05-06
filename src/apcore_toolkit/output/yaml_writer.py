@@ -63,6 +63,7 @@ class YAMLWriter:
 
         results: list[WriteResult] = []
         timestamp = datetime.now(timezone.utc).isoformat()
+        written_names: dict[str, str] = {}  # sanitized_filename -> original module_id
 
         for module in modules:
             binding_data = self._build_binding(module)
@@ -76,6 +77,12 @@ class YAMLWriter:
             # Collapse consecutive dots to prevent path traversal
             safe_id = re.sub(r"\.{2,}", "_", safe_id)
             filename = f"{safe_id}.binding.yaml"
+            # Collision tracking: append _N suffix when sanitized name collides
+            counter = 0
+            while filename in written_names:
+                counter += 1
+                filename = f"{safe_id}_{counter}.binding.yaml"
+            written_names[filename] = module.module_id
             # Keep file_path unresolved so the symlink check below detects
             # a symlink AT the target path instead of silently following it.
             # (``Path.resolve()`` dereferences the final symlink component.)

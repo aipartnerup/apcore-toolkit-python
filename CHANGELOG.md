@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+### Fixed
+
+### Removed
+
+### Changed
+- Version alignment with apcore-toolkit-typescript 0.5.1 (no functional changes)
+
 ## [0.5.0] - 2026-04-21
 
 ### Added

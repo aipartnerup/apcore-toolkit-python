@@ -7,6 +7,7 @@ scanner can use them without subclassing.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger("apcore_toolkit")
@@ -79,15 +80,49 @@ def _deep_resolve_refs(
         if key in result and isinstance(result[key], list):
             result[key] = [_deep_resolve_refs(item, openapi_doc, _depth + 1) for item in result[key]]
 
-    # Resolve array items
-    if "items" in result and isinstance(result["items"], dict):
-        result["items"] = _deep_resolve_refs(result["items"], openapi_doc, _depth + 1)
+    # Resolve array items — dict form (single schema) or list form (tuple validation)
+    if "items" in result:
+        if isinstance(result["items"], dict):
+            result["items"] = _deep_resolve_refs(result["items"], openapi_doc, _depth + 1)
+        elif isinstance(result["items"], list):
+            result["items"] = [
+                _deep_resolve_refs(item, openapi_doc, _depth + 1)
+                for item in result["items"]
+                if isinstance(item, dict)
+            ]
 
     # Resolve nested properties
     if "properties" in result and isinstance(result["properties"], dict):
         result["properties"] = {
             k: _deep_resolve_refs(v, openapi_doc, _depth + 1) for k, v in result["properties"].items()
         }
+
+    # Resolve additionalProperties when it is a schema dict (not a boolean)
+    if "additionalProperties" in result and isinstance(result["additionalProperties"], dict):
+        result["additionalProperties"] = _deep_resolve_refs(
+            result["additionalProperties"], openapi_doc, _depth + 1
+        )
+
+    # Resolve patternProperties — each value is a schema dict
+    if "patternProperties" in result and isinstance(result["patternProperties"], dict):
+        result["patternProperties"] = {
+            pattern: _deep_resolve_refs(sub_schema, openapi_doc, _depth + 1)
+            for pattern, sub_schema in result["patternProperties"].items()
+            if isinstance(sub_schema, dict)
+        }
+
+    # Resolve not / if / then / else keywords
+    for key in ("not", "if", "then", "else"):
+        if key in result and isinstance(result[key], dict):
+            result[key] = _deep_resolve_refs(result[key], openapi_doc, _depth + 1)
+
+    # Resolve prefixItems (JSON Schema draft 2020-12 tuple validation)
+    if "prefixItems" in result and isinstance(result["prefixItems"], list):
+        result["prefixItems"] = [
+            _deep_resolve_refs(item, openapi_doc, _depth + 1)
+            for item in result["prefixItems"]
+            if isinstance(item, dict)
+        ]
 
     return result
 
@@ -181,7 +216,7 @@ def extract_output_schema(
     operation: dict[str, Any],
     openapi_doc: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Extract output schema from OpenAPI operation responses (200/201).
+    """Extract output schema from OpenAPI operation responses (any 2xx code).
 
     Args:
         operation: An OpenAPI operation dict.
@@ -191,7 +226,7 @@ def extract_output_schema(
         The output JSON Schema dict, or a default empty object schema.
     """
     responses = operation.get("responses", {})
-    for status_code in ("200", "201", "202", "203"):
+    for status_code in sorted(k for k in responses if re.match(r"^2\d\d$", k)):
         response = responses.get(status_code, {})
         content = response.get("content", {})
         json_content: dict[str, Any] = {}

@@ -27,7 +27,7 @@ class Verifier(Protocol):
     according to domain-specific rules.
     """
 
-    def verify(self, path: str, module_id: str) -> VerifyResult: ...
+    def verify(self, path: str, module_id: str, /) -> VerifyResult: ...
 
 
 @dataclass

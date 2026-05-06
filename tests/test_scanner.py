@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from apcore import parse_docstring
 from apcore_toolkit.http_verb_map import generate_suggested_alias
 from apcore_toolkit.scanner import BaseScanner
 from apcore_toolkit.types import ScannedModule
@@ -12,7 +13,7 @@ from apcore_toolkit.types import ScannedModule
 class ConcreteScanner(BaseScanner):
     """Minimal concrete scanner for testing."""
 
-    def scan(self, **kwargs: Any) -> list[ScannedModule]:
+    def scan(self, **_: Any) -> list[ScannedModule]:
         return []
 
     def get_source_name(self) -> str:
@@ -231,8 +232,7 @@ class TestExtractDocstring:
             Extended description here.
             """
 
-        scanner = ConcreteScanner()
-        desc, doc, params = scanner.extract_docstring(sample)
+        desc, _, _ = parse_docstring(sample)
         assert desc is not None
         assert "First line" in desc
 
@@ -240,8 +240,7 @@ class TestExtractDocstring:
         def no_doc():
             pass
 
-        scanner = ConcreteScanner()
-        desc, doc, params = scanner.extract_docstring(no_doc)
+        desc, doc, _ = parse_docstring(no_doc)
         assert desc is None
         assert doc is None
 

@@ -36,7 +36,7 @@ class TestVerifyResult:
 class TestVerifierProtocol:
     def test_custom_verifier_matches_protocol(self):
         class MyVerifier:
-            def verify(self, path: str, module_id: str) -> VerifyResult:
+            def verify(self, _path: str, _module_id: str) -> VerifyResult:
                 return VerifyResult(ok=True)
 
         assert isinstance(MyVerifier(), Verifier)
@@ -64,6 +64,7 @@ class TestYAMLVerifier:
         f.write_text(": :\n  -\n  bad: [")
         r = YAMLVerifier().verify(str(f), "x")
         assert r.ok is False
+        assert r.error is not None
         assert "Invalid YAML" in r.error
 
     def test_missing_bindings(self, tmp_path):
@@ -71,6 +72,7 @@ class TestYAMLVerifier:
         f.write_text(yaml.dump({"other": "data"}))
         r = YAMLVerifier().verify(str(f), "x")
         assert r.ok is False
+        assert r.error is not None
         assert "bindings" in r.error
 
     def test_missing_module_id(self, tmp_path):
@@ -78,6 +80,53 @@ class TestYAMLVerifier:
         f.write_text(yaml.dump({"bindings": [{"target": "a:b"}]}))
         r = YAMLVerifier().verify(str(f), "x")
         assert r.ok is False
+        assert r.error is not None
+        assert "module_id" in r.error
+
+    def test_yaml_verifier_checks_all_entries(self, tmp_path):
+        # First entry is valid, second entry is missing 'target' — verifier must catch it.
+        yaml_content = (
+            "bindings:\n"
+            "  - module_id: user.create\n"
+            "    target: src.users:create\n"
+            "  - module_id: user.update\n"
+            "    # missing target field\n"
+        )
+        f = tmp_path / "test.yaml"
+        f.write_text(yaml_content)
+        r = YAMLVerifier().verify(str(f), "user.update")
+        assert r.ok is False
+        assert r.error is not None
+        assert "target" in r.error
+
+    def test_whitespace_only_module_id_rejected(self, tmp_path):
+        """D11-007: module_id with only spaces must be rejected (not truthy whitespace)."""
+        data = {"bindings": [{"module_id": "   ", "target": "pkg:func"}]}
+        f = tmp_path / "test.yaml"
+        f.write_text(yaml.dump(data))
+        r = YAMLVerifier().verify(str(f), "   ")
+        assert r.ok is False
+        assert r.error is not None
+        assert "module_id" in r.error
+
+    def test_whitespace_only_target_rejected(self, tmp_path):
+        """D11-007: target with only spaces must be rejected."""
+        data = {"bindings": [{"module_id": "valid.module", "target": "  \t  "}]}
+        f = tmp_path / "test.yaml"
+        f.write_text(yaml.dump(data))
+        r = YAMLVerifier().verify(str(f), "valid.module")
+        assert r.ok is False
+        assert r.error is not None
+        assert "target" in r.error
+
+    def test_non_string_module_id_rejected(self, tmp_path):
+        """D11-007: non-string module_id (e.g. integer) must be rejected."""
+        data = {"bindings": [{"module_id": 42, "target": "pkg:func"}]}
+        f = tmp_path / "test.yaml"
+        f.write_text(yaml.dump(data))
+        r = YAMLVerifier().verify(str(f), "42")
+        assert r.ok is False
+        assert r.error is not None
         assert "module_id" in r.error
 
 
@@ -96,6 +145,7 @@ class TestSyntaxVerifier:
         f.write_text("def f(\n")
         r = SyntaxVerifier().verify(str(f), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "syntax" in r.error.lower()
 
 
@@ -114,11 +164,13 @@ class TestMagicBytesVerifier:
         f.write_bytes(b"XXXX")
         r = MagicBytesVerifier(b"\x89PNG").verify(str(f), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "mismatch" in r.error.lower()
 
     def test_missing_file(self, tmp_path):
         r = MagicBytesVerifier(b"\x89PNG").verify(str(tmp_path / "nope"), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "Cannot read" in r.error
 
 
@@ -137,6 +189,7 @@ class TestJSONVerifier:
         f.write_text("{not json")
         r = JSONVerifier().verify(str(f), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "Invalid JSON" in r.error
 
     def test_schema_validation_without_jsonschema(self, tmp_path, monkeypatch):
@@ -156,6 +209,7 @@ class TestJSONVerifier:
         monkeypatch.setattr(builtins, "__import__", mock_import)
         r = JSONVerifier(schema={"type": "object"}).verify(str(f), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "jsonschema" in r.error.lower()
 
 
@@ -163,7 +217,7 @@ class TestJSONVerifier:
 # run_verifier_chain
 # ---------------------------------------------------------------------------
 class _PassVerifier:
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, _path: str, _module_id: str) -> VerifyResult:
         return VerifyResult(ok=True)
 
 
@@ -171,12 +225,12 @@ class _FailVerifier:
     def __init__(self, msg: str = "fail"):
         self._msg = msg
 
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, _path: str, _module_id: str) -> VerifyResult:
         return VerifyResult(ok=False, error=self._msg)
 
 
 class _CrashVerifier:
-    def verify(self, path: str, module_id: str) -> VerifyResult:
+    def verify(self, _path: str, _module_id: str) -> VerifyResult:
         raise RuntimeError("boom")
 
 
@@ -201,6 +255,7 @@ class TestRunVerifierChain:
     def test_crash_is_caught(self):
         r = run_verifier_chain([_CrashVerifier()], "/tmp/x", "m")
         assert r.ok is False
+        assert r.error is not None
         assert "Verifier crashed" in r.error
 
 
@@ -348,16 +403,19 @@ class TestVerifierIOErrors:
     def test_yaml_verifier_missing_file(self, tmp_path):
         r = YAMLVerifier().verify(str(tmp_path / "nonexistent.yaml"), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "Cannot read" in r.error
 
     def test_syntax_verifier_missing_file(self, tmp_path):
         r = SyntaxVerifier().verify(str(tmp_path / "nonexistent.py"), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "Cannot read" in r.error
 
     def test_json_verifier_missing_file(self, tmp_path):
         r = JSONVerifier().verify(str(tmp_path / "nonexistent.json"), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "Cannot read" in r.error
 
     def test_yaml_verifier_non_dict_binding_entry(self, tmp_path):
@@ -366,4 +424,5 @@ class TestVerifierIOErrors:
         f.write_text(yaml.dump({"bindings": ["not-a-dict"]}))
         r = YAMLVerifier().verify(str(f), "m")
         assert r.ok is False
+        assert r.error is not None
         assert "mapping" in r.error.lower()
