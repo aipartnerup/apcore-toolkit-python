@@ -143,6 +143,32 @@ class TestLoadData:
         m.metadata["auth"]["scope"].append("leaked")
         assert source_meta["auth"]["scope"] == ["admin", "write"]
 
+    def test_metadata_filters_proto_pollution_keys(
+        self, loader: BindingLoader, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Regression: ``__proto__`` / ``constructor`` / ``prototype`` keys in
+        binding-YAML metadata must be dropped at parse time so they cannot
+        propagate to JS-side consumers (cross-language prototype-pollution
+        guard). Mirrors TypeScript ``binding-parser.ts`` ``PROTO_DENY``."""
+        import logging
+
+        entry = {
+            "module_id": "x",
+            "target": "p:f",
+            "metadata": {
+                "__proto__": {"polluted": True},
+                "constructor": "evil",
+                "prototype": ["bad"],
+                "safe_key": "kept",
+            },
+        }
+        with caplog.at_level(logging.WARNING, logger="apcore_toolkit"):
+            m = loader.load_data({"bindings": [entry]})[0]
+        assert m.metadata == {"safe_key": "kept"}
+        assert "__proto__" in caplog.text
+        assert "constructor" in caplog.text
+        assert "prototype" in caplog.text
+
     def test_missing_bindings_key(self, loader: BindingLoader) -> None:
         with pytest.raises(BindingLoadError, match="bindings"):
             loader.load_data({"spec_version": "1.0"})

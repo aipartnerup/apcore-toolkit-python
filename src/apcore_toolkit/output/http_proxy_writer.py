@@ -28,6 +28,7 @@ import logging
 import re
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import quote
 
 from apcore import DEFAULT_ANNOTATIONS, ErrorCodes, Registry
 from apcore.errors import ModuleError
@@ -41,6 +42,20 @@ logger = logging.getLogger("apcore_toolkit")
 # HEAD, DELETE, OPTIONS) forward non-path inputs via the query string
 # so they are not silently dropped.
 _BODY_METHODS: frozenset[str] = frozenset({"POST", "PUT", "PATCH"})
+
+# Matches any unfilled placeholder ({name} or :name) left after substitution.
+_UNFILLED_PARAM_RE: re.Pattern[str] = re.compile(r"\{[^}]+\}|:[a-zA-Z_]\w*")
+
+
+def _percent_encode_path_segment(value: str) -> str:
+    """Percent-encode a path-parameter value per RFC 3986 unreserved set.
+
+    Mirrors Rust's ``percent_encode_path_segment`` so a path-param value
+    containing ``/``, ``?``, ``#``, ``%``, or whitespace cannot break the
+    request URL. ``safe=""`` keeps only ALPHA / DIGIT / ``-`` / ``.`` /
+    ``_`` / ``~`` literal — the unreserved set.
+    """
+    return quote(value, safe="")
 
 
 def _get_http_fields(mod: Any) -> tuple[str, str]:
@@ -160,11 +175,30 @@ class HTTPProxyRegistryWriter:
                         )
                     headers.update(auth_result)
 
-                # Separate path params from the rest; substitute both
-                # brace-style and colon-style placeholders via the shared
-                # helper so behaviour matches http_verb_map's extraction.
-                path_values = {k: v for k, v in inputs.items() if k in path_params}
+                # Separate path params from the rest; percent-encode each
+                # path-param value (RFC 3986 unreserved set) BEFORE
+                # substitution so values containing "/", "?", "#", "%", or
+                # whitespace cannot corrupt the URL. Mirrors the Rust
+                # implementation's percent_encode_path_segment.
+                path_values = {
+                    k: _percent_encode_path_segment(str(v))
+                    for k, v in inputs.items()
+                    if k in path_params
+                }
                 actual_path = substitute_path_params(url_path, path_values)
+                # Reject the request if any placeholder went unfilled —
+                # otherwise a forgotten input would silently leak `{name}`
+                # into the request URL.
+                unfilled = _UNFILLED_PARAM_RE.search(actual_path)
+                if unfilled is not None:
+                    raise ModuleError(
+                        code=ErrorCodes.MODULE_EXECUTE_ERROR,
+                        message=(
+                            f"path parameter not provided: {unfilled.group(0)!r} "
+                            f"in url_path {url_path!r}"
+                        ),
+                        details={"url_path": url_path, "missing": unfilled.group(0)},
+                    )
                 non_path = {k: v for k, v in inputs.items() if k not in path_params}
 
                 # Body for POST/PUT/PATCH; query for everything else

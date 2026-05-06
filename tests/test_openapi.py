@@ -83,6 +83,27 @@ class TestResolveRef:
         result = resolve_ref("#/a/b/c", OPENAPI_DOC)
         assert result == {}
 
+    def test_rfc6901_slash_escape(self) -> None:
+        # RFC 6901 §4: `/` inside a pointer segment is escaped as `~1`.
+        # Without decoding, the resolver would split on `~1` literally
+        # and miss the schema. With decoding, it walks `Foo/Bar` correctly.
+        doc = {"components": {"schemas": {"Foo/Bar": {"type": "string"}}}}
+        result = resolve_ref("#/components/schemas/Foo~1Bar", doc)
+        assert result == {"type": "string"}
+
+    def test_rfc6901_tilde_escape(self) -> None:
+        # `~` inside a pointer segment is escaped as `~0`.
+        doc = {"components": {"schemas": {"Foo~Bar": {"type": "integer"}}}}
+        result = resolve_ref("#/components/schemas/Foo~0Bar", doc)
+        assert result == {"type": "integer"}
+
+    def test_rfc6901_decode_order(self) -> None:
+        # `~01` MUST decode to `~1` (not `/`): `~0` decodes first to `~`,
+        # then the `1` is left untouched. Verifies the spec-mandated order.
+        doc = {"components": {"schemas": {"Foo~1Bar": {"type": "boolean"}}}}
+        result = resolve_ref("#/components/schemas/Foo~01Bar", doc)
+        assert result == {"type": "boolean"}
+
 
 class TestResolveSchema:
     def test_ref_schema(self) -> None:

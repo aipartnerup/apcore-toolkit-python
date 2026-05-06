@@ -27,6 +27,34 @@ _LOOSE_REQUIRED = ("module_id", "target")
 _MAX_BINDING_FILE_SIZE = 16 * 1024 * 1024  # 16 MiB
 _MAX_BINDING_FILES_PER_DIR = 10_000
 
+# Keys whose presence in a metadata dict is unsafe for cross-runtime
+# round-trip — they correspond to JS prototype-pollution sinks. Filter
+# them at parse time so a malicious or malformed binding YAML cannot
+# carry an attacker-controlled "__proto__" / "constructor" / "prototype"
+# entry into downstream consumers (matches the TypeScript loader's
+# PROTO_DENY guard in src/binding-parser.ts).
+_FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({"__proto__", "constructor", "prototype"})
+
+
+def _safe_metadata(raw: Any) -> dict[str, Any]:
+    """Return a deep-copied metadata dict with forbidden keys filtered out.
+
+    A WARNING is logged once per forbidden key encountered so loading is
+    observable without aborting parse for inputs that are otherwise valid.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    cleaned: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key in _FORBIDDEN_METADATA_KEYS:
+            logger.warning(
+                "BindingLoader: dropping forbidden metadata key %r (prototype-pollution guard)",
+                key,
+            )
+            continue
+        cleaned[key] = copy.deepcopy(value)
+    return cleaned
+
 
 class BindingLoadError(Exception):
     """Raised when a binding YAML entry cannot be parsed into a ``ScannedModule``.
@@ -261,7 +289,7 @@ class BindingLoader:
             documentation=entry.get("documentation"),
             suggested_alias=entry.get("suggested_alias"),
             examples=self._parse_examples(entry.get("examples"), module_id=entry["module_id"]),
-            metadata=copy.deepcopy(entry.get("metadata") or {}),
+            metadata=_safe_metadata(entry.get("metadata") or {}),
             display=self._parse_display(entry.get("display"), module_id=entry["module_id"]),
             warnings=list(entry.get("warnings") or []),
         )

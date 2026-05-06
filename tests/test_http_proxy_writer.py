@@ -252,6 +252,72 @@ class TestHTTPProxyRegistryWriter:
         assert call_args[1].get("params") == {"ids": "1,2,3"}
         assert "json" not in call_args[1]
 
+    def test_path_param_value_is_percent_encoded(self, monkeypatch) -> None:
+        """Regression: path-param values containing reserved chars (e.g. ``/``)
+        must be RFC 3986 percent-encoded so they cannot corrupt the URL."""
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+
+        mod = _make_module(
+            module_id="test.get_item_encoded.get",
+            http_method="GET",
+            url_path="/items/{item_id}",
+            input_schema={
+                "type": "object",
+                "properties": {"item_id": {"type": "string"}},
+                "required": ["item_id"],
+            },
+        )
+        writer.write([mod], registry)
+        module_instance = registry._modules["test.get_item_encoded.get"]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {}
+
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
+
+        # ``a/b#c`` would otherwise corrupt the URL — both ``/`` and ``#``
+        # must be percent-encoded.
+        asyncio.run(module_instance.execute({"item_id": "a/b#c"}))
+        call_args = mock_client.request.call_args
+        assert call_args[0] == ("GET", "/items/a%2Fb%23c")
+
+    def test_unfilled_path_param_raises_module_error(self, monkeypatch) -> None:
+        """Regression: a missing path-parameter input must NOT leak ``{name}``
+        into the request URL — it must raise ``ModuleError`` instead."""
+        from apcore.errors import ModuleError
+
+        registry = Registry()
+        writer = HTTPProxyRegistryWriter(base_url="http://localhost:8000")
+
+        mod = _make_module(
+            module_id="test.unfilled_param.get",
+            http_method="GET",
+            url_path="/items/{item_id}",
+            input_schema={
+                "type": "object",
+                "properties": {"item_id": {"type": "string"}},
+                "required": ["item_id"],
+            },
+        )
+        writer.write([mod], registry)
+        module_instance = registry._modules["test.unfilled_param.get"]
+
+        mock_client = AsyncMock()
+        monkeypatch.setattr(httpx, "AsyncClient", MagicMock(return_value=mock_client))
+
+        with pytest.raises(ModuleError) as exc_info:
+            asyncio.run(module_instance.execute({}))
+        assert "{item_id}" in str(exc_info.value)
+        # The HTTP client must NOT be called when validation fails.
+        mock_client.request.assert_not_called()
+
     def test_write_failure_preserves_traceback(self, caplog, monkeypatch) -> None:
         """When module construction fails, the warning log must carry exc_info
         and the WriteResult error must include the exception class name."""

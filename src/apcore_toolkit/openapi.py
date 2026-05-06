@@ -25,7 +25,8 @@ def resolve_ref(ref_string: str, openapi_doc: dict[str, Any]) -> dict[str, Any]:
     """
     if not ref_string.startswith("#/"):
         return {}
-    parts = ref_string[2:].split("/")
+    # RFC 6901 §4 — decode `~1` to `/` BEFORE `~0` to `~` (order matters).
+    parts = [p.replace("~1", "/").replace("~0", "~") for p in ref_string[2:].split("/")]
     current: Any = openapi_doc
     for part in parts:
         if not isinstance(current, dict):
