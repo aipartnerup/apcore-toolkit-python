@@ -8,8 +8,11 @@ from apcore_toolkit.formatting.surface import (
     format_modules,
     format_schema,
 )
+from apcore_toolkit.formatting.tabular import format_csv, format_jsonl
 
 __all__ = [
+    "format_csv",
+    "format_jsonl",
     "format_module",
     "format_modules",
     "format_schema",

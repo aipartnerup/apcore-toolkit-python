@@ -39,6 +39,8 @@ pip install apcore-toolkit
 | `MagicBytesVerifier` | Verifies file headers match expected magic bytes |
 | `JSONVerifier` | Verifies JSON files parse correctly |
 | `to_markdown` | Converts arbitrary dicts to Markdown with depth control and table heuristics |
+| `format_csv` _(v0.7.0)_ | Byte-equivalent RFC 4180 CSV emitter — header = union of keys across all rows; nested cells = canonical JSON; CRLF terminator |
+| `format_jsonl` _(v0.7.0)_ | Byte-equivalent JSON Lines emitter — canonical compact JSON per row, LF terminator |
 | `flatten_pydantic_params` | Converts Pydantic model parameters to flat kwargs |
 | `resolve_target` | Resolves "module.path:function_name" to callable |
 | `enrich_schema_descriptions` | Merges descriptions into JSON Schema properties |
@@ -148,6 +150,33 @@ from apcore_toolkit import to_markdown
 
 md = to_markdown({"name": "Alice", "role": "admin"}, title="User Info")
 ```
+
+### Tabular Formats (v0.7.0)
+
+Byte-equivalent CSV / JSONL emitters with a cross-SDK conformance contract — Python, TypeScript, and Rust produce identical bytes for the same input.
+
+```python
+from apcore_toolkit import format_csv, format_jsonl
+
+rows = [
+    {"sn": 1, "title": "First", "score": 78},
+    {"sn": 2, "title": "Second", "score": 82, "description": "later-only field"},
+]
+
+# CSV: header = union of keys across all rows (no silent data loss on
+# heterogeneous rows); nested values serialized as canonical compact JSON;
+# RFC 4180 CRLF line terminator.
+csv_text = format_csv(rows)
+# 'sn,title,score,description\r\n1,First,78,\r\n2,Second,82,later-only field\r\n'
+
+# JSONL: canonical compact JSON per row, LF terminator, no trailing blank.
+jsonl_text = format_jsonl(rows)
+
+# UTF-8 BOM for Excel locales (default off for pipeline consumers):
+csv_for_excel = format_csv(rows, bom=True)
+```
+
+See `apcore-toolkit/docs/features/formatting.md` § Tabular Formats for the full contract and `apcore-toolkit/conformance/fixtures/format_csv.json` / `format_jsonl.json` for the shared cross-SDK test corpus.
 
 ### Display Overlay (§5.13)
 

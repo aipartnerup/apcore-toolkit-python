@@ -9,6 +9,8 @@ from apcore_toolkit.ai_enhancer import AIEnhancer, Enhancer
 from apcore_toolkit.binding_loader import BindingLoader, BindingLoadError
 from apcore_toolkit.display import DisplayResolver
 from apcore_toolkit.formatting import (
+    format_csv,
+    format_jsonl,
     format_module,
     format_modules,
     format_schema,
@@ -96,6 +98,8 @@ __all__ = [
     "extract_path_param_names",
     "filter_modules",
     "flatten_pydantic_params",
+    "format_csv",
+    "format_jsonl",
     "format_module",
     "format_modules",
     "format_schema",
