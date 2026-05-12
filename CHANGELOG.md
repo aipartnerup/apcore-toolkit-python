@@ -2,10 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.7.0] - 2026-05-11
+
+## [0.7.0] - 2026-05-12
 
 ### Added
 
+- New conformance test `tests/test_display_resolve_conformance.py` wired to the shared fixture `apcore-toolkit/conformance/fixtures/display_resolve.json` (14 cases). Previously orphaned across all three SDKs (D9-W1).
 - **`format_csv(rows, *, bom=False)` and `format_jsonl(rows)`** — byte-equivalent tabular data formatters. Lives in `apcore_toolkit.formatting.tabular`; re-exported at the top-level package. Cross-SDK byte-identity contract: every SDK (Python / TypeScript / Rust) emits identical bytes for the same input. Canonical contract:
     - **CSV**: header = union of keys across all rows (insertion-order, first occurrence); fixes the prior single-row-keys data-loss bug in apcore-cli SDK implementations. Non-scalar cells = canonical compact JSON. RFC 4180 CRLF terminator. Embedded `,` / `"` / `\n` / `\r` quote-wrapped. Optional UTF-8 BOM for Excel-locale users.
     - **JSONL**: each row = canonical compact JSON (no inter-token whitespace, insertion-order preserved, whole-number floats drop `.0` matching JS `JSON.stringify`, NaN/Inf → null). LF terminator, no trailing blank.
@@ -16,8 +18,13 @@ All notable changes to this project will be documented in this file.
 
 Per-SDK reimplementations of csv/jsonl had accumulated divergence (Python repr vs JSON, heterogeneous-keys silent data loss in TS, `\n` vs CRLF in Rust). The spec MUST language couldn't enforce conformance on downstream consumers (e.g. aisee-cli) that reimplemented their own emission. Lifting csv/jsonl into the toolkit replaces those independent failure modes with a single conformance-tested reference. See `apcore-cli/docs/tech-design.md` ADR-09 for the tier-split rationale.
 
+### Changed
+
+- `RegistryWriter._to_function_module` no longer coerces an empty `examples` list to `None`. Empty collections now round-trip as `[]` to match the canonical Rust/TS behavior (D11-007).
+
 ### Notes
 
+- D3-W1 (apcore runtime floor mismatch): the TS SDK's `apcore-js >= 0.21.1` floor was lowered to `>=0.21.0` for alignment with Python and Rust, which target the apcore 0.21 line on PyPI / crates.io. Python's floor is unchanged at `>=0.21.0`.
 - YAML byte-equivalence is deferred — each idiomatic YAML library has different quoting/indent heuristics. Tracked as a follow-up.
 - Integers above `Number.MAX_SAFE_INTEGER` (2^53-1) are not cross-SDK portable; callers should serialize them as JSON strings.
 

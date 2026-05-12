@@ -134,7 +134,7 @@ class RegistryWriter:
             version=mod.version,
             annotations=annotations_to_dict(mod.annotations),
             metadata=mod.metadata,
-            examples=mod.examples or None,
+            examples=mod.examples,
         )
 
     @staticmethod
