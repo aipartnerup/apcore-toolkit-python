@@ -21,7 +21,7 @@ _CONFORMANCE_DIR = Path(__file__).resolve().parent.parent.parent / "apcore-toolk
 def _load_fixture(name: str) -> list[dict]:
     path = _CONFORMANCE_DIR / name
     if not path.exists():
-        pytest.skip(f"conformance fixture not found at {path}")
+        pytest.skip(f"conformance fixture not found at {path}", allow_module_level=True)
     data = json.loads(path.read_text(encoding="utf-8"))
     return data["test_cases"]
 

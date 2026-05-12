@@ -28,7 +28,7 @@ _CONFORMANCE_DIR = (
 def _load_fixture() -> list[dict[str, Any]]:
     path = _CONFORMANCE_DIR / "display_resolve.json"
     if not path.exists():
-        pytest.skip(f"conformance fixture not found at {path}")
+        pytest.skip(f"conformance fixture not found at {path}", allow_module_level=True)
     data = json.loads(path.read_text(encoding="utf-8"))
     return data["test_cases"]
 
