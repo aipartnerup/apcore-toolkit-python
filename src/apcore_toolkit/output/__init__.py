@@ -31,8 +31,11 @@ def get_writer(
     """Return a writer instance for the given output format.
 
     Args:
-        output_format: Output format name (``"yaml"``, ``"python"``,
-            ``"registry"``, or ``"http-proxy"``).
+        output_format: Output format name. Canonical values are ``"yaml"``,
+            ``"python"``, ``"registry"``, and ``"http-proxy"``. The HTTP-proxy
+            variant additionally accepts the aliases ``"http_proxy"`` and
+            ``"httpproxy"`` for cross-SDK consistency with the TypeScript and
+            Rust SDKs.
         **kwargs: Passed to the writer constructor. For ``"http-proxy"``:
             ``base_url``, ``auth_header_factory``, ``timeout``.
 
@@ -43,7 +46,7 @@ def get_writer(
         InvalidFormatError: If the format is not recognized. Subclass of
             ``ValueError`` so existing ``except ValueError`` callers keep
             working; mirrors TypeScript ``InvalidFormatError`` and Rust
-            ``OutputFormatError::Unknown`` for cross-SDK parity.
+            ``InvalidFormatError::Unknown`` for cross-SDK parity.
     """
     if output_format == "yaml":
         if kwargs:
@@ -57,7 +60,7 @@ def get_writer(
         if kwargs:
             raise TypeError(f"RegistryWriter accepts no keyword arguments, got: {sorted(kwargs)}")
         return RegistryWriter()
-    if output_format == "http-proxy":
+    if output_format in ("http-proxy", "http_proxy", "httpproxy"):
         from apcore_toolkit.output.http_proxy_writer import HTTPProxyRegistryWriter
 
         return HTTPProxyRegistryWriter(**kwargs)

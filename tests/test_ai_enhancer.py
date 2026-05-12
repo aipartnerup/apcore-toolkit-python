@@ -288,6 +288,42 @@ class TestEnhanceModule:
 
         assert result.input_schema == new_schema
 
+    def test_ignores_malformed_input_schema_non_dict(
+        self, enhancer: AIEnhancer, sparse_module: ScannedModule, caplog
+    ) -> None:
+        """SLM may return ``input_schema`` as a string/list — must be dropped with a warning."""
+        original = sparse_module.input_schema
+        llm_response = json.dumps(
+            {
+                "input_schema": "object",  # string, not dict
+                "confidence": {"input_schema": 0.99},
+            }
+        )
+        with caplog.at_level("WARNING", logger="apcore_toolkit"):
+            with patch.object(enhancer, "_call_llm", return_value=llm_response):
+                result = enhancer._enhance_module(sparse_module, ["input_schema"])
+
+        assert result.input_schema == original
+        assert any("malformed input_schema" in rec.message for rec in caplog.records)
+
+    def test_ignores_malformed_input_schema_dict_without_type(
+        self, enhancer: AIEnhancer, sparse_module: ScannedModule, caplog
+    ) -> None:
+        """A dict missing the ``type`` key is not a valid JSON Schema — drop it."""
+        original = sparse_module.input_schema
+        llm_response = json.dumps(
+            {
+                "input_schema": {"properties": {"x": {"type": "integer"}}},  # no "type"
+                "confidence": {"input_schema": 0.99},
+            }
+        )
+        with caplog.at_level("WARNING", logger="apcore_toolkit"):
+            with patch.object(enhancer, "_call_llm", return_value=llm_response):
+                result = enhancer._enhance_module(sparse_module, ["input_schema"])
+
+        assert result.input_schema == original
+        assert any("malformed input_schema" in rec.message for rec in caplog.records)
+
     def test_ignores_non_dict_annotations(self, enhancer: AIEnhancer, sparse_module: ScannedModule) -> None:
         llm_response = json.dumps(
             {

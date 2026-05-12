@@ -28,7 +28,7 @@ import logging
 import re
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from apcore import DEFAULT_ANNOTATIONS, ErrorCodes, Registry
 from apcore.errors import ModuleError
@@ -100,6 +100,13 @@ class HTTPProxyRegistryWriter:
         auth_header_factory: Callable[[], dict[str, str]] | None = None,
         timeout: float = 60.0,
     ) -> None:
+        # Reject non-http(s) schemes up-front so a misconfigured base_url
+        # (e.g. ``file:///x`` or ``ftp://...``) cannot reach the HTTP client.
+        # Mirrors the Rust ``HTTPProxyRegistryWriter::new`` ``InvalidBaseUrl``
+        # check so the three SDKs stay behaviourally aligned.
+        parsed = urlparse(base_url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Invalid base_url scheme {parsed.scheme!r} — must be 'http' or 'https'")
         self._base_url = base_url
         self._auth_header_factory = auth_header_factory
         self._timeout = timeout

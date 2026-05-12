@@ -122,6 +122,31 @@ class TestLoadData:
             loader.load_data({"bindings": [entry]}, strict=True)
         assert "input_schema" in exc.value.missing_fields
 
+    def test_loose_mode_warns_and_coerces_wrong_type_optional_fields(
+        self, loader: BindingLoader, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Loose-mode wrong-type policy (binding-loader.md § Loose-mode wrong-type policy):
+        non-required fields with the wrong type warn and coerce to empty defaults
+        instead of raising. Mirrors the Rust and TypeScript loaders.
+        """
+        entry = {
+            "module_id": "x",
+            "target": "pkg:func",
+            "input_schema": 42,
+            "output_schema": "not a dict",
+            "tags": "single-string-not-a-list",
+        }
+        with caplog.at_level("WARNING", logger="apcore_toolkit"):
+            modules = loader.load_data({"bindings": [entry]})
+        assert len(modules) == 1
+        assert modules[0].input_schema == {}
+        assert modules[0].output_schema == {}
+        assert modules[0].tags == []
+        warning_messages = " ".join(r.message for r in caplog.records)
+        assert "input_schema" in warning_messages
+        assert "output_schema" in warning_messages
+        assert "tags" in warning_messages
+
     def test_input_schema_deep_copied_on_load(self, loader: BindingLoader) -> None:
         """Regression: mutating a loaded module's input_schema must not leak back.
 
@@ -411,27 +436,41 @@ class TestRoundTrip:
 
 
 class TestMalformedFieldTypes:
-    """Malformed field types must raise BindingLoadError, not bare TypeError."""
+    """In strict mode, malformed non-required field types must raise
+    BindingLoadError (not bare TypeError) and the error must carry the
+    offending module_id. Loose mode warns and coerces — see
+    ``test_loose_mode_warns_and_coerces_wrong_type_optional_fields``."""
 
     def test_input_schema_string_raises_binding_load_error(self, loader: BindingLoader) -> None:
         data = {"bindings": [{"module_id": "x", "target": "m:f", "input_schema": "not-a-dict"}]}
         with pytest.raises(BindingLoadError, match="input_schema"):
-            loader.load_data(data)
+            loader.load_data(data, strict=True)
 
     def test_output_schema_int_raises_binding_load_error(self, loader: BindingLoader) -> None:
         data = {"bindings": [{"module_id": "x", "target": "m:f", "output_schema": 42}]}
         with pytest.raises(BindingLoadError, match="output_schema"):
-            loader.load_data(data)
+            loader.load_data(data, strict=True)
 
     def test_tags_string_raises_binding_load_error(self, loader: BindingLoader) -> None:
-        data = {"bindings": [{"module_id": "x", "target": "m:f", "tags": "not-a-list"}]}
+        # Provide valid input_schema/output_schema so strict mode reaches the tags check.
+        data = {
+            "bindings": [
+                {
+                    "module_id": "x",
+                    "target": "m:f",
+                    "input_schema": {},
+                    "output_schema": {},
+                    "tags": "not-a-list",
+                }
+            ]
+        }
         with pytest.raises(BindingLoadError, match="tags"):
-            loader.load_data(data)
+            loader.load_data(data, strict=True)
 
     def test_error_carries_module_id(self, loader: BindingLoader) -> None:
         data = {"bindings": [{"module_id": "my.module", "target": "m:f", "input_schema": "oops"}]}
         with pytest.raises(BindingLoadError) as exc_info:
-            loader.load_data(data)
+            loader.load_data(data, strict=True)
         assert exc_info.value.module_id == "my.module"
 
 

@@ -250,27 +250,53 @@ class BindingLoader:
                 missing_fields=missing,
             )
 
+        # Loose-mode wrong-type policy (apcore-toolkit/docs/features/binding-loader.md
+        # § Loose-mode wrong-type policy): for non-required fields
+        # (input_schema / output_schema / tags), strict mode raises
+        # BindingLoadError, loose mode warns and coerces to the empty default —
+        # mirroring the Rust and TypeScript loaders.
         raw_input_schema = entry.get("input_schema")
         if raw_input_schema is not None and not isinstance(raw_input_schema, dict):
-            raise BindingLoadError(
-                f"'input_schema' must be a mapping, got {type(raw_input_schema).__name__!r}",
-                file_path=file_path,
-                module_id=entry.get("module_id"),
+            if strict:
+                raise BindingLoadError(
+                    f"'input_schema' must be a mapping, got {type(raw_input_schema).__name__!r}",
+                    file_path=file_path,
+                    module_id=entry.get("module_id"),
+                )
+            logger.warning(
+                "binding entry %r: 'input_schema' must be a mapping, got %r — coercing to {}",
+                entry.get("module_id"),
+                type(raw_input_schema).__name__,
             )
+            raw_input_schema = None
         raw_output_schema = entry.get("output_schema")
         if raw_output_schema is not None and not isinstance(raw_output_schema, dict):
-            raise BindingLoadError(
-                f"'output_schema' must be a mapping, got {type(raw_output_schema).__name__!r}",
-                file_path=file_path,
-                module_id=entry.get("module_id"),
+            if strict:
+                raise BindingLoadError(
+                    f"'output_schema' must be a mapping, got {type(raw_output_schema).__name__!r}",
+                    file_path=file_path,
+                    module_id=entry.get("module_id"),
+                )
+            logger.warning(
+                "binding entry %r: 'output_schema' must be a mapping, got %r — coercing to {}",
+                entry.get("module_id"),
+                type(raw_output_schema).__name__,
             )
+            raw_output_schema = None
         raw_tags = entry.get("tags")
         if raw_tags is not None and not isinstance(raw_tags, list):
-            raise BindingLoadError(
-                f"'tags' must be a list, got {type(raw_tags).__name__!r}",
-                file_path=file_path,
-                module_id=entry.get("module_id"),
+            if strict:
+                raise BindingLoadError(
+                    f"'tags' must be a list, got {type(raw_tags).__name__!r}",
+                    file_path=file_path,
+                    module_id=entry.get("module_id"),
+                )
+            logger.warning(
+                "binding entry %r: 'tags' must be a list, got %r — coercing to []",
+                entry.get("module_id"),
+                type(raw_tags).__name__,
             )
+            raw_tags = None
 
         # Deep-copy nested containers so later caller mutation of a
         # ScannedModule.input_schema/output_schema/metadata does not leak back

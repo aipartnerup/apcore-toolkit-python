@@ -21,6 +21,19 @@ Per-SDK reimplementations of csv/jsonl had accumulated divergence (Python repr v
 - YAML byte-equivalence is deferred — each idiomatic YAML library has different quoting/indent heuristics. Tracked as a follow-up.
 - Integers above `Number.MAX_SAFE_INTEGER` (2^53-1) are not cross-SDK portable; callers should serialize them as JSON strings.
 
+### Fixed (post-audit cross-SDK reconciliation)
+
+The 2026-05-12 cross-SDK audit (`/apcore-skills:audit --scope toolkit`) flagged contract-parity divergences between Python and the TypeScript / Rust SDKs. The following Python-side adjustments bring behaviour in line with the spec and the other two SDKs.
+
+- **`BindingLoader._parse_entry` loose-mode wrong-type policy** (D10-001) — when `strict=False` (the default), wrong-type non-required optional fields (`input_schema`, `output_schema`, `tags`) now log a `WARNING` (logger `apcore_toolkit`) and coerce to the empty default (`{}` / `[]`) instead of raising `BindingLoadError`. Mirrors the warn-and-coerce behaviour of `apcore-toolkit-rust` and `apcore-toolkit-typescript`. Strict mode (`strict=True`) is unchanged: wrong-type optional fields still raise `BindingLoadError`. Spec: `apcore-toolkit/docs/features/binding-loader.md` § Loose-mode wrong-type policy. **Behaviour change** for callers running with `strict=False` (the default) that previously caught `BindingLoadError` for malformed optional fields — those callers will now see warning logs instead of an exception, and the binding entry will load with empty optional-field values.
+- **`get_writer` HTTP-proxy aliases** (D10-003) — `get_writer("http_proxy", base_url=...)` and `get_writer("httpproxy", base_url=...)` now return an `HTTPProxyRegistryWriter`. Previously only the canonical `"http-proxy"` was accepted; the new aliases match the cross-SDK guarantee already honoured by `apcore-toolkit-typescript` and `apcore-toolkit-rust`. Canonical formats (`"yaml"`, `"python"`, `"registry"`, `"http-proxy"`) remain case-sensitive. Spec: `apcore-toolkit/docs/features/output-writers.md` § Contract: get_writer.
+- **Dead re-export `_module_path_matches_prefix` removed from `apcore_toolkit.pydantic_utils`** (D9-002) — the alias was never imported by any caller in `src/` or `tests/`. Removed from the module body and from `__all__`. Single-underscore symbols are not part of the public re-export surface; consumers that still need the helper should import it directly from `apcore_toolkit.resolve_target`.
+- **Docstring** — `get_writer` docstring corrected to refer to Rust's renamed `InvalidFormatError::Unknown` (was `OutputFormatError::Unknown`); see `apcore-toolkit-rust` 0.7.0 entry for the rename.
+
+### Test suite
+
+- 684 tests pass (was 683); +1 regression test `test_loose_mode_warns_and_coerces_wrong_type_optional_fields` covering the new D10-001 behaviour. Existing strict-mode tests in `TestMalformedFieldTypes` were updated to pass `strict=True` explicitly so the strict-mode rejection contract continues to be exercised.
+
 
 ## [0.6.0] - 2026-05-07
 

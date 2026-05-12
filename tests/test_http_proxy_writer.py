@@ -32,6 +32,32 @@ def _make_module(
     )
 
 
+class TestHTTPProxyRegistryWriterBaseURL:
+    """Behavioural parity with Rust's ``HTTPProxyRegistryWriter::new``:
+    the constructor must reject non-http(s) base_url schemes up-front so
+    a misconfigured config cannot reach the HTTP client.
+    """
+
+    @pytest.mark.parametrize(
+        "bad_url",
+        [
+            "file:///x",
+            "ftp://example.com",
+            "ws://example.com",
+            "javascript:alert(1)",
+            "://no-scheme",
+        ],
+    )
+    def test_init_rejects_non_http_scheme(self, bad_url: str) -> None:
+        with pytest.raises(ValueError, match="Invalid base_url scheme"):
+            HTTPProxyRegistryWriter(base_url=bad_url)
+
+    @pytest.mark.parametrize("good_url", ["http://localhost:8000", "https://api.example.com"])
+    def test_init_accepts_http_and_https(self, good_url: str) -> None:
+        # Must not raise.
+        HTTPProxyRegistryWriter(base_url=good_url)
+
+
 class TestHTTPProxyRegistryWriter:
     def test_write_registers_all_modules(self) -> None:
         registry = Registry()

@@ -20,17 +20,23 @@ pip install apcore-toolkit
 | Module | Description |
 |--------|-------------|
 | `ScannedModule` | Canonical dataclass representing a scanned endpoint |
+| `create_scanned_module` | Factory that constructs a `ScannedModule` with sensible defaults |
+| `clone_module` | Returns a copy of a `ScannedModule` with selected fields overridden |
 | `BaseScanner` | Abstract base class for framework scanners with filtering and deduplication |
+| `filter_modules` | Standalone include/exclude regex filter over a list of `ScannedModule` |
+| `deduplicate_ids` | Removes modules with duplicate `module_id`, keeping first occurrence |
+| `infer_annotations_from_method` | Infers `ModuleAnnotations` from an HTTP method string (GET/POST/etc.) |
 | `YAMLWriter` | Generates `.binding.yaml` files for `apcore.BindingLoader` |
 | `BindingLoader` | Parses `.binding.yaml` files back into `ScannedModule` objects (pure-data inverse of `YAMLWriter`, with loose/strict modes) |
 | `BindingLoadError` | Exception raised when binding parsing fails; carries `file_path`, `module_id`, `missing_fields`, `reason` |
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
-| `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API |
+| `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API (requires `pip install apcore-toolkit[http-proxy]`) |
 | `Enhancer` | Pluggable protocol for metadata enhancement |
 | `AIEnhancer` | SLM-based metadata enhancement for scanned modules |
 | `WriteResult` | Structured result type for all writer operations |
 | `WriteError` | Error class for I/O failures during write |
+| `InvalidFormatError` | Raised by `get_writer` when an unknown output format name is requested |
 | `Verifier` | Pluggable protocol for validating written artifacts |
 | `VerifyResult` | Result type for verification operations |
 | `YAMLVerifier` | Verifies YAML files parse correctly with required fields |
@@ -39,10 +45,19 @@ pip install apcore-toolkit
 | `MagicBytesVerifier` | Verifies file headers match expected magic bytes |
 | `JSONVerifier` | Verifies JSON files parse correctly |
 | `to_markdown` | Converts arbitrary dicts to Markdown with depth control and table heuristics |
+| `format_module` _(v0.6.0)_ | Surface-aware renderer for a single `ScannedModule` (styles: `markdown`, `skill`, `table-row`, `json`) |
+| `format_modules` _(v0.6.0)_ | Batch renderer for a list of `ScannedModule`; supports grouping by tag or module-id prefix |
+| `format_schema` _(v0.6.0)_ | Surface-aware JSON Schema renderer (styles: `prose`, `table`, `json`) with depth control |
 | `format_csv` _(v0.7.0)_ | Byte-equivalent RFC 4180 CSV emitter — header = union of keys across all rows; nested cells = canonical JSON; CRLF terminator |
 | `format_jsonl` _(v0.7.0)_ | Byte-equivalent JSON Lines emitter — canonical compact JSON per row, LF terminator |
 | `flatten_pydantic_params` | Converts Pydantic model parameters to flat kwargs |
 | `resolve_target` | Resolves "module.path:function_name" to callable |
+| `SCANNER_VERB_MAP` | Canonical mapping of scanner verbs (`get` / `list` / `create` / ...) to HTTP methods |
+| `resolve_http_verb` | Resolves an HTTP method string to its scanner verb (with optional URL-path heuristic for `GET`) |
+| `generate_suggested_alias` | Suggests a stable scanner alias for an endpoint based on path and verb |
+| `has_path_params` | Returns `True` if a URL path template contains `{name}` or `:name` placeholders |
+| `extract_path_param_names` | Extracts the ordered list of path-parameter names from a URL path template |
+| `substitute_path_params` | Substitutes path-parameter values into a URL path template (raises on unknown params) |
 | `enrich_schema_descriptions` | Merges descriptions into JSON Schema properties |
 | `get_writer` | Factory function for writer instances |
 | `DisplayResolver` | Sparse binding.yaml display overlay — resolves surface-facing alias, description, guidance, tags into `metadata["display"]` (§5.13) |
@@ -150,6 +165,29 @@ from apcore_toolkit import to_markdown
 
 md = to_markdown({"name": "Alice", "role": "admin"}, title="User Info")
 ```
+
+### Surface-Aware Formatters (v0.6.0)
+
+`format_module` / `format_modules` / `format_schema` render `ScannedModule` and JSON Schema for specific consumer surfaces — LLM context, agent skill files, CLI listings, or programmatic JSON.
+
+```python
+from apcore_toolkit import format_module, format_modules, format_schema
+
+# Module styles: "markdown" (default), "skill", "table-row", "json"
+md = format_module(module, style="markdown")
+skill_file = format_module(module, style="skill")        # ---\nname: ...\ndescription: ...\n---
+row = format_module(module, style="table-row")           # CLI listing row
+payload = format_module(module, style="json")            # dict (for APIs)
+
+# Batch with optional grouping by tag or module-id prefix
+listing = format_modules(modules, style="markdown", group_by="tag")
+
+# Schema styles: "prose" (default), "table", "json"
+prose = format_schema(schema, style="prose", max_depth=3)
+table = format_schema(schema, style="table")
+```
+
+See `apcore-toolkit/docs/features/formatting.md` for the full contract.
 
 ### Tabular Formats (v0.7.0)
 

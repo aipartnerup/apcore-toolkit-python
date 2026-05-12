@@ -291,6 +291,23 @@ class AIEnhancer:
                 base = module.annotations or DEFAULT_ANNOTATIONS
                 updates["annotations"] = replace(base, **accepted)
 
+        # Guard: SLMs occasionally return ``input_schema`` as a plain string,
+        # list, or a dict without ``"type"``. Applying such a value would
+        # corrupt the module's schema and break downstream consumers, so
+        # we drop it with a warning before delegating to ``_apply_simple``.
+        # Mirrors the TypeScript SDK's ``ai-enhancer.ts`` shape check so
+        # the three SDKs agree on what counts as a valid SLM payload.
+        if "input_schema" in gaps and "input_schema" in parsed:
+            candidate = parsed["input_schema"]
+            if not (isinstance(candidate, dict) and "type" in candidate):
+                logger.warning(
+                    "Module '%s': SLM returned malformed input_schema (%r) — "
+                    "expected a dict with a 'type' key; skipping.",
+                    module.module_id,
+                    candidate,
+                )
+                parsed.pop("input_schema", None)
+
         _apply_simple("input_schema")
 
         if not updates:

@@ -20,13 +20,9 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
-from apcore_toolkit.resolve_target import (
-    _module_path_matches_prefix as _module_path_matches_prefix,
-)
 from apcore_toolkit.resolve_target import resolve_target as resolve_target
 
 __all__ = [
-    "_module_path_matches_prefix",
     "flatten_pydantic_params",
     "resolve_target",
 ]
